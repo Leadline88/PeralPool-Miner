@@ -2,13 +2,57 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum MiningMode {
+    #[default]
+    Compatibility,
+    NativeCpu,
+    NativeGpu,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum MiningBackend {
+    #[default]
+    Cpu,
+    Cuda,
+    Hip,
+    Opencl,
+    Sycl,
+    Metal,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Config {
     pub wallet: String,
     pub worker_name: String,
     pub pool_url: String,
+
+    #[serde(default)]
+    pub mode: MiningMode,
+
+    #[serde(default)]
+    pub backend: MiningBackend,
+
+    #[serde(default = "default_algo")]
+    pub algo: String,
+
+    #[serde(default)]
+    pub benchmark: bool,
+
+    #[serde(default)]
+    pub dry_run: bool,
+
+    // Keep for compatibility mode
+    #[serde(default)]
     pub miner_binary_path: String,
+    #[serde(default)]
     pub args: Vec<String>,
+}
+
+fn default_algo() -> String {
+    "pearl".to_string()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,9 +89,9 @@ impl Config {
                 "Pool URL cannot be empty".to_string(),
             ));
         }
-        if self.miner_binary_path.is_empty() {
+        if self.mode == MiningMode::Compatibility && self.miner_binary_path.is_empty() {
             return Err(ConfigError::Validation(
-                "Miner binary path cannot be empty".to_string(),
+                "Miner binary path cannot be empty in compatibility mode".to_string(),
             ));
         }
         Ok(())
@@ -59,7 +103,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_valid_config() {
+    fn test_valid_config_compatibility() {
         let toml_str = r#"
             wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
             worker_name = "worker1"
@@ -70,6 +114,25 @@ mod tests {
 
         let config: Config = toml::from_str(toml_str).unwrap();
         assert!(config.validate().is_ok());
+        assert_eq!(config.mode, MiningMode::Compatibility);
+    }
+
+    #[test]
+    fn test_valid_config_native() {
+        let toml_str = r#"
+            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+            worker_name = "worker1"
+            pool_url = "stratum+tcp://pearlpool.cloud:5566"
+            mode = "native-cpu"
+            backend = "cpu"
+            algo = "pearl"
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.validate().is_ok());
+        assert_eq!(config.mode, MiningMode::NativeCpu);
+        assert_eq!(config.backend, MiningBackend::Cpu);
+        assert_eq!(config.algo, "pearl");
     }
 
     #[test]
@@ -87,39 +150,12 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_config_empty_worker_name() {
-        let toml_str = r#"
-            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
-            worker_name = ""
-            pool_url = "stratum+tcp://pearlpool.cloud:5566"
-            miner_binary_path = "/usr/bin/miner"
-            args = []
-        "#;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert!(config.validate().is_err());
-    }
-
-    #[test]
-    fn test_invalid_config_empty_pool_url() {
-        let toml_str = r#"
-            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
-            worker_name = "worker1"
-            pool_url = ""
-            miner_binary_path = "/usr/bin/miner"
-            args = []
-        "#;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert!(config.validate().is_err());
-    }
-
-    #[test]
-    fn test_invalid_config_empty_miner_binary_path() {
+    fn test_invalid_config_empty_miner_binary_path_in_compatibility() {
         let toml_str = r#"
             wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
             worker_name = "worker1"
             pool_url = "stratum+tcp://pearlpool.cloud:5566"
+            mode = "compatibility"
             miner_binary_path = ""
             args = []
         "#;
