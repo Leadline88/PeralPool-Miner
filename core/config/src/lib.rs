@@ -85,4 +85,46 @@ mod tests {
         let config: Config = toml::from_str(toml_str).unwrap();
         assert!(config.validate().is_err());
     }
+
+    #[test]
+    fn test_invalid_config_empty_worker_name() {
+        let toml_str = r#"
+            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+            worker_name = ""
+            pool_url = "stratum+tcp://pearlpool.cloud:5566"
+            miner_binary_path = "/usr/bin/miner"
+            args = []
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_config_empty_pool_url() {
+        let toml_str = r#"
+            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+            worker_name = "worker1"
+            pool_url = ""
+            miner_binary_path = "/usr/bin/miner"
+            args = []
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_config_empty_miner_binary_path() {
+        let toml_str = r#"
+            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+            worker_name = "worker1"
+            pool_url = "stratum+tcp://pearlpool.cloud:5566"
+            miner_binary_path = ""
+            args = []
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.validate().is_err());
+    }
 }
