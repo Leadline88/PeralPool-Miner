@@ -1,10 +1,9 @@
 [package]
-name = "devfee"
+name = "mining"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mining = { path = "../mining" }
-stats = { path = "../stats" }
+serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
-tracing = "0.1"

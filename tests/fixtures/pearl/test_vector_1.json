@@ -1,0 +1,11 @@
+{
+  "id": "test_1",
+  "blob": "00112233445566778899aabbccddeeff",
+  "target": 9223372036854775807,
+  "expected_shares": [
+    {
+      "nonce": 0,
+      "comment": "Synthetic share for verification testing"
+    }
+  ]
+}

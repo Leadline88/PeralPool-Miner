@@ -2,7 +2,7 @@
 
 A modular, extensible cryptocurrency miner written in Rust.
 
-Pearl Miner is pivoting from a simple external miner manager into a fully native Pearl miner. It supports multiple backends and provides a transparent mining experience.
+Pearl Miner supports multiple backends and provides a transparent mining experience.
 
 ## Features
 
@@ -15,6 +15,16 @@ Pearl Miner is pivoting from a simple external miner manager into a fully native
 - **Process Watchdog**: Automatically restarts external miners in compatibility mode.
 - **Log Streaming**: Clean, unified logging for all modes.
 
+## Current Status
+
+- **Compatibility mode**: Available ✅
+- **Native CPU reference miner**: Available ✅
+- **Live PearlPool mining**: Not verified yet 🛠️
+- **CUDA/HIP/OpenCL/SYCL/Metal**: Planned 🛠️
+
+> [!WARNING]
+> Native CPU mode is a reference implementation and is not performance-competitive with GPU miners.
+
 ## Transparent 1% Developer Fee
 
 Pearl Miner includes a transparent 1.0% developer fee. This fee is used to fund the development and maintenance of the project.
@@ -23,28 +33,17 @@ Pearl Miner includes a transparent 1.0% developer fee. This fee is used to fund 
 - **Visibility**: The fee is clearly displayed at startup and in status outputs.
 - **Honesty**: No hidden telemetry, no stealth mining, no misleading performance claims.
 
-Use the `--dev-fee-info` flag to view detailed fee information.
+Use the `--dev-fee-info` flag to view detailed fee information. See [docs/developer-fee.md](docs/developer-fee.md) for more details.
 
-## Roadmap
+## Benchmarking
 
-- [x] Native miner architecture foundation
-- [x] Transparent developer fee implementation
-- [x] CLI & Configuration overhaul
-- [ ] Internal Pearl CPU miner implementation
-- [ ] CUDA backend for NVIDIA GPUs
-- [ ] HIP/OpenCL backend for AMD GPUs
-- [ ] Metal backend for Apple Silicon
-- [ ] SYCL/OpenCL backend for Intel GPUs
+Pearl Miner includes a built-in benchmark for the native CPU miner.
 
-## Capability Matrix
+```bash
+cargo run --release --bin miner-cli -- --benchmark-native-cpu
+```
 
-| OS      | CPU | CUDA | HIP/OpenCL | SYCL/OpenCL | Metal |
-|---------|-----|------|------------|-------------|-------|
-| Windows | ✅  | 🛠️   | 🛠️         | 🛠️          | ❌    |
-| Linux   | ✅  | 🛠️   | 🛠️         | 🛠️          | ❌    |
-| macOS   | ✅  | ❌   | ❌         | ❌          | 🛠️    |
-
-Legend: ✅ Functional, 🛠️ Planned/In Progress, ❌ Not Supported
+Results are displayed in the console and saved to `benchmark_report.json`. See [docs/benchmarking.md](docs/benchmarking.md) for more details.
 
 ## Setup
 
@@ -79,14 +78,8 @@ pool_url = "stratum+tcp://pearlpool.cloud:5566"
 mode = "native-cpu"
 backend = "cpu"
 algo = "pearl"
-```
-
-In `compatibility` mode, you also need:
-
-```toml
-mode = "compatibility"
-miner_binary_path = "./miners/lpminer/lpminer.exe"
-args = ["--algo", "pearl", "--pool", "stratum+tcp://pearlpool.cloud:5566"]
+threads = 0 # 0 for all available cores
+deterministic = false
 ```
 
 ## Security and Transparency Promise
