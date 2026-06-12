@@ -1,11 +1,11 @@
 #[cfg(test)]
-mod tests {
+mod stratum_tests {
     use crate::adapter::PoolAdapter;
     use crate::client::{StratumClient, StratumEvent};
     use crate::miner_loop::MinerLoop;
     use crate::mock_server::MockStratumServer;
     use chrono::Utc;
-    use shares::{ShareCandidate, ShareStatus};
+    use shares::ShareCandidate;
     use std::sync::Arc;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
@@ -54,7 +54,7 @@ mod tests {
         }
         fn parse_difficulty(&self, req: &crate::protocol::JsonRpcRequest) -> Option<f64> {
             if req.method == "mining.set_difficulty" {
-                req.params.as_array()?.get(0)?.as_f64()
+                req.params.as_array()?.first()?.as_f64()
             } else {
                 None
             }

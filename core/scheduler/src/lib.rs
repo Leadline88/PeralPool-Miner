@@ -1,8 +1,8 @@
+use devfee::{DEFAULT_DEV_FEE, DEFAULT_DEV_WALLET};
 use stats::StatsManager;
 use std::sync::Arc;
-use tokio::time::{Duration, sleep};
+use tokio::time::{sleep, Duration};
 use tracing::info;
-use devfee::{DEFAULT_DEV_FEE, DEFAULT_DEV_WALLET};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
