@@ -5,6 +5,17 @@ members = [
     "core/process",
     "core/logging",
     "core/watchdog",
+    "core/miner",
+    "core/stratum",
+    "core/shares",
+    "core/devfee",
+    "algos/pearl",
+    "backends/cpu",
+    "backends/cuda",
+    "backends/hip",
+    "backends/opencl",
+    "backends/sycl",
+    "backends/metal",
     "integrations/pearlpool"
 ]
 resolver = "2"
