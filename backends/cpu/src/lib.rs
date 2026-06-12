@@ -2,9 +2,9 @@ use algo_pearl::{PearlAlgorithm, PearlJob, PearlShareCandidate, PearlVerifier};
 use async_trait::async_trait;
 use mining::{MiningAlgorithm, MiningBackend};
 use stats::StatsManager;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use tokio::sync::{RwLock, broadcast, mpsc};
+use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::info;
 
 pub struct CpuBackend {
@@ -107,6 +107,54 @@ impl CpuBackend {
         ctx.total_hashes.fetch_add(local_hashes, Ordering::Relaxed);
     }
 }
+#[async_trait]
+impl MiningBackend for CpuBackend {
+    async fn start(&self) -> Result<(), String> {
+        info!("Starting CPU backend with {} threads", self.threads);
+        Ok(())
+    }
+
+    async fn stop(&self) -> Result<(), String> {
+        let _ = self.cancel_tx.send(());
+        Ok(())
+    }
+
+    async fn set_job(&self, job_data: &str) -> Result<(), String> {
+        let algo = PearlAlgorithm;
+        let job = algo.parse_job(job_data)?;
+
+        // Cancel previous workers
+        let _ = self.cancel_tx.send(());
+
+        self.stats.notify_new_job().await;
+
+        let mut current = self.current_job.write().await;
+        *current = Some(job.clone());
+
+        // Spawn new workers
+        for i in 0..self.threads {
+            let ctx = WorkerContext {
+                id: i,
+                threads: self.threads,
+                job: job.clone(),
+                cancel_rx: self.cancel_tx.subscribe(),
+                stats: self.stats.clone(),
+                is_dev_mining: self.is_dev_mining.clone(),
+                total_hashes: self.total_hashes.clone(),
+                share_tx: self.share_tx.clone(),
+            };
+            tokio::spawn(async move {
+                Self::worker_loop(ctx).await;
+            });
+        }
+
+        Ok(())
+    }
+
+    async fn get_hashrate(&self) -> f64 {
+        self.total_hashes.swap(0, Ordering::Relaxed) as f64
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -172,54 +220,5 @@ mod tests {
 
         // Also stop it to be sure
         backend.stop().await.unwrap();
-    }
-}
-
-#[async_trait]
-impl MiningBackend for CpuBackend {
-    async fn start(&self) -> Result<(), String> {
-        info!("Starting CPU backend with {} threads", self.threads);
-        Ok(())
-    }
-
-    async fn stop(&self) -> Result<(), String> {
-        let _ = self.cancel_tx.send(());
-        Ok(())
-    }
-
-    async fn set_job(&self, job_data: &str) -> Result<(), String> {
-        let algo = PearlAlgorithm;
-        let job = algo.parse_job(job_data)?;
-
-        // Cancel previous workers
-        let _ = self.cancel_tx.send(());
-
-        self.stats.notify_new_job().await;
-
-        let mut current = self.current_job.write().await;
-        *current = Some(job.clone());
-
-        // Spawn new workers
-        for i in 0..self.threads {
-            let ctx = WorkerContext {
-                id: i,
-                threads: self.threads,
-                job: job.clone(),
-                cancel_rx: self.cancel_tx.subscribe(),
-                stats: self.stats.clone(),
-                is_dev_mining: self.is_dev_mining.clone(),
-                total_hashes: self.total_hashes.clone(),
-                share_tx: self.share_tx.clone(),
-            };
-            tokio::spawn(async move {
-                Self::worker_loop(ctx).await;
-            });
-        }
-
-        Ok(())
-    }
-
-    async fn get_hashrate(&self) -> f64 {
-        self.total_hashes.swap(0, Ordering::Relaxed) as f64
     }
 }

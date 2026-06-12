@@ -7,12 +7,12 @@ use mining::{MiningAlgorithm, MiningBackend};
 use pearlpool::PearlPoolAdapter;
 use scheduler::DevFeeScheduler;
 use stats::StatsManager;
-use stratum::client::StratumClient;
-use stratum::miner_loop::MinerLoop;
 use std::path::PathBuf;
 use std::process::exit;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use stratum::client::StratumClient;
+use stratum::miner_loop::MinerLoop;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -212,13 +212,21 @@ async fn main() {
             let is_dev_mining = Arc::new(AtomicBool::new(false));
             let scheduler =
                 DevFeeScheduler::new(config.wallet.clone(), stats.clone(), is_dev_mining.clone());
-            let threads = if config.threads > 0 { config.threads } else { num_cpus::get() };
+            let threads = if config.threads > 0 {
+                config.threads
+            } else {
+                num_cpus::get()
+            };
 
             let (share_tx, mut share_rx) = mpsc::channel::<PearlShareCandidate>(100);
 
-            let backend = Arc::new(
-                CpuBackend::new(threads, stats.clone(), is_dev_mining.clone(), config.deterministic, share_tx)
-            );
+            let backend = Arc::new(CpuBackend::new(
+                threads,
+                stats.clone(),
+                is_dev_mining.clone(),
+                config.deterministic,
+                share_tx,
+            ));
 
             let scheduler_handle = tokio::spawn(async move {
                 scheduler.run().await;
@@ -258,7 +266,9 @@ async fn main() {
             let miner_loop_clone = miner_loop.clone();
             let cancel_token_miner = cancel_token.clone();
             tokio::spawn(async move {
-                miner_loop_clone.run(miner_share_rx, cancel_token_miner).await;
+                miner_loop_clone
+                    .run(miner_share_rx, cancel_token_miner)
+                    .await;
             });
 
             let worker_name = config.worker_name.clone();
@@ -281,20 +291,35 @@ async fn main() {
             let backend_status_clone = backend.clone();
             let start_time = Utc::now();
             tokio::spawn(async move {
+                let mut total_hashes = 0.0;
+                let mut status_count = 0;
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                    let runtime_stats = stats_clone.get_stats().await;
                     let uptime = Utc::now() - start_time;
                     let hashes = backend_status_clone.get_hashrate().await;
+                    total_hashes += hashes;
+                    status_count += 1;
+
                     let hashrate = hashes / 10.0;
-                    let accepted = stats_clone.get_stats().await.accepted_shares;
+                    let avg_hashrate = total_hashes / (status_count as f64 * 10.0);
+
                     let target_type = if is_dev_mining_clone.load(Ordering::Relaxed) {
                         "DEVELOPER"
                     } else {
                         "USER"
                     };
+
                     info!(
-                        "Status: {:.2} H/s | Accepted: {} | Uptime: {} | Target: {}",
-                        hashrate, accepted, format_duration(uptime), target_type
+                        "Status: {:.2} H/s (avg {:.2} H/s) | A: {} R: {} S: {} | Uptime: {} | Job Age: {}s | Target: {}",
+                        hashrate,
+                        avg_hashrate,
+                        runtime_stats.accepted_shares,
+                        runtime_stats.rejected_shares,
+                        runtime_stats.stale_shares,
+                        format_duration(uptime),
+                        runtime_stats.job_age_secs,
+                        target_type
                     );
                 }
             });
@@ -313,7 +338,10 @@ async fn main() {
         MiningMode::NativeGpu => {
             info!("Running in native-gpu mode");
             info!("Backend: {:?}", config.backend);
-            error!("Native GPU mining is not yet implemented for {:?} backend.", config.backend);
+            error!(
+                "Native GPU mining is not yet implemented for {:?} backend.",
+                config.backend
+            );
             exit(1);
         }
     }
@@ -330,11 +358,10 @@ fn format_duration(dur: chrono::Duration) -> String {
 async fn run_benchmark() {
     info!("Benchmarking Native CPU...");
     let algo = algo_pearl::PearlAlgorithm;
+    let dummy_job_json = r#"{"id":"bench","blob":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff","target":1000000}"#;
 
     // Benchmark Job Parsing
     let parse_start = std::time::Instant::now();
-    let dummy_job_json =
-        r#"{"id":"bench","blob":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff","target":1000000}"#;
     for _ in 0..1000 {
         let _ = algo.parse_job(dummy_job_json).unwrap();
     }
@@ -344,7 +371,13 @@ async fn run_benchmark() {
     let work_start = std::time::Instant::now();
     let job = algo.parse_job(dummy_job_json).unwrap();
     for _ in 0..1000 {
-        let _ = algo.create_work(&job, mining::NonceRange { start: 0, end: 1000 });
+        let _ = algo.create_work(
+            &job,
+            mining::NonceRange {
+                start: 0,
+                end: 1000,
+            },
+        );
     }
     let work_time_avg = work_start.elapsed().as_secs_f64() / 1000.0;
 
@@ -356,28 +389,65 @@ async fn run_benchmark() {
     }
     let verify_time_avg = verify_start.elapsed().as_secs_f64() / 10000.0;
 
-    // Benchmark Throughput
-    info!("Running throughput benchmark (5 seconds)...");
+    // Benchmark Throughput - Single-threaded
+    info!("Running single-threaded throughput benchmark (5 seconds)...");
     let start = std::time::Instant::now();
     let mut count = 0;
     let target = 0x00000000FFFFFFFF;
-
     while start.elapsed().as_secs() < 5 {
         for _ in 0..10000 {
             algo_pearl::PearlVerifier::verify(&blob, count, target);
             count += 1;
         }
     }
+    let elapsed_single = start.elapsed().as_secs_f64();
+    let hashrate_single = count as f64 / elapsed_single;
+    info!("Single-threaded result: {:.2} H/s", hashrate_single);
 
-    let elapsed = start.elapsed().as_secs_f64();
-    let hashrate = count as f64 / elapsed;
+    // Benchmark Throughput - Multi-threaded
+    let threads = num_cpus::get();
+    info!(
+        "Running multi-threaded ({} threads) throughput benchmark (5 seconds)...",
+        threads
+    );
+    let start = std::time::Instant::now();
+    let total_count = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut handles = Vec::new();
+
+    for i in 0..threads {
+        let total_count = total_count.clone();
+        let blob = blob.clone();
+        handles.push(std::thread::spawn(move || {
+            let mut local_count = 0;
+            let mut nonce = i as u64;
+            let thread_start = std::time::Instant::now();
+            while thread_start.elapsed().as_secs() < 5 {
+                for _ in 0..10000 {
+                    algo_pearl::PearlVerifier::verify(&blob, nonce, target);
+                    nonce += threads as u64;
+                    local_count += 1;
+                }
+            }
+            total_count.fetch_add(local_count, std::sync::atomic::Ordering::Relaxed);
+        }));
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let elapsed_multi = start.elapsed().as_secs_f64();
+    let hashrate_multi =
+        total_count.load(std::sync::atomic::Ordering::Relaxed) as f64 / elapsed_multi;
+    info!("Multi-threaded result: {:.2} H/s", hashrate_multi);
 
     let report = serde_json::json!({
         "backend": "native-cpu",
-        "hashrate": hashrate,
+        "hashrate_single": hashrate_single,
+        "hashrate_multi": hashrate_multi,
         "unit": "H/s",
-        "threads": num_cpus::get(),
-        "duration_secs": elapsed,
+        "threads": threads,
+        "duration_secs": 5.0,
         "avg_job_parse_secs": parse_time_avg,
         "avg_work_package_creation_secs": work_time_avg,
         "avg_share_verify_secs": verify_time_avg,
@@ -393,7 +463,7 @@ async fn run_benchmark() {
         info!("Benchmark report saved to {}", report_path);
     }
 
-    info!("Benchmark complete: {:.2} H/s", hashrate);
+    info!("Benchmark complete!");
 }
 
 async fn verify_fixture(path: &str) {

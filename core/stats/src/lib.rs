@@ -60,6 +60,16 @@ impl StatsManager {
         stats.accepted_shares += 1;
     }
 
+    pub async fn inc_rejected(&self) {
+        let mut stats = self.stats.write().await;
+        stats.rejected_shares += 1;
+    }
+
+    pub async fn inc_stale(&self) {
+        let mut stats = self.stats.write().await;
+        stats.stale_shares += 1;
+    }
+
     pub fn inc_accepted_sync(&self) {
         // This is a simplified version; in a real high-performance miner,
         // we'd use atomics for stats to avoid locking in the hot loop.
@@ -67,6 +77,22 @@ impl StatsManager {
         tokio::spawn(async move {
             let mut s = stats.write().await;
             s.accepted_shares += 1;
+        });
+    }
+
+    pub fn inc_rejected_sync(&self) {
+        let stats = self.stats.clone();
+        tokio::spawn(async move {
+            let mut s = stats.write().await;
+            s.rejected_shares += 1;
+        });
+    }
+
+    pub fn inc_stale_sync(&self) {
+        let stats = self.stats.clone();
+        tokio::spawn(async move {
+            let mut s = stats.write().await;
+            s.stale_shares += 1;
         });
     }
 
@@ -85,5 +111,37 @@ impl StatsManager {
     pub async fn notify_new_job(&self) {
         let mut last_job = self.last_job_time.write().await;
         *last_job = Instant::now();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn test_stats_tracking() {
+        let manager = StatsManager::new();
+        manager.inc_accepted().await;
+        manager.inc_rejected().await;
+        manager.inc_stale().await;
+        manager.update_hashrate(1234.5).await;
+        manager.set_wallet("test_wallet".to_string()).await;
+
+        let stats = manager.get_stats().await;
+        assert_eq!(stats.accepted_shares, 1);
+        assert_eq!(stats.rejected_shares, 1);
+        assert_eq!(stats.stale_shares, 1);
+        assert_eq!(stats.hashrate, 1234.5);
+        assert_eq!(stats.current_wallet, "test_wallet");
+    }
+
+    #[tokio::test]
+    async fn test_job_age() {
+        let manager = StatsManager::new();
+        manager.notify_new_job().await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let stats = manager.get_stats().await;
+        assert!(stats.job_age_secs >= 1);
     }
 }

@@ -25,8 +25,9 @@ The benchmark results are saved to `benchmark_report.json` with the following sc
   "avg_share_verify_secs": 9.200132699999999e-6,
   "avg_work_package_creation_secs": 7.108325e-6,
   "backend": "native-cpu",
-  "duration_secs": 5.033925772,
-  "hashrate": 107272.14,
+  "duration_secs": 5.0,
+  "hashrate_single": 107272.14,
+  "hashrate_multi": 412345.67,
   "threads": 4,
   "timestamp": "2026-06-12T10:44:57.657359194+00:00",
   "unit": "H/s"
@@ -38,7 +39,8 @@ The benchmark results are saved to `benchmark_report.json` with the following sc
 - `avg_work_package_creation_secs`: average time in seconds for creating a work package.
 - `backend`: the backend used (e.g., `native-cpu`).
 - `duration_secs`: duration of the throughput benchmark in seconds.
-- `hashrate`: hashes per second.
-- `threads`: number of threads used.
+- `hashrate_single`: hashes per second (single-threaded).
+- `hashrate_multi`: hashes per second (multi-threaded).
+- `threads`: number of threads used for multi-threaded test.
 - `timestamp`: RFC3339 timestamp of the benchmark run.
 - `unit`: the unit of hashrate (`H/s`).
