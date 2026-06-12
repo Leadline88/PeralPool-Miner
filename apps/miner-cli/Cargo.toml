@@ -1,0 +1,12 @@
+[package]
+name = "miner-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.43", features = ["rt-multi-thread", "macros"] }
+config = { path = "../../core/config" }
+logging = { path = "../../core/logging" }
+watchdog = { path = "../../core/watchdog" }
+pearlpool = { path = "../../integrations/pearlpool" }
+tracing = "0.1.44"

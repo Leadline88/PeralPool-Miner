@@ -1,0 +1,9 @@
+[package]
+name = "watchdog"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.43", features = ["rt", "time", "signal"] }
+tracing = "0.1.44"
+process = { path = "../process" }

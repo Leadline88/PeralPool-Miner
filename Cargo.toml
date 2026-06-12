@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "apps/miner-cli",
+    "core/config",
+    "core/process",
+    "core/logging",
+    "core/watchdog",
+    "integrations/pearlpool"
+]
+resolver = "2"

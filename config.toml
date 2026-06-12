@@ -1,0 +1,5 @@
+wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+worker_name = "worker1"
+pool_url = "stratum+tcp://pearlpool.cloud:5566"
+miner_binary_path = "/bin/echo"
+args = ["Hello", "World!"]
