@@ -5,6 +5,8 @@ members = [
     "core/process",
     "core/logging",
     "core/watchdog",
+    "core/shares",
+    "core/stratum",
     "integrations/pearlpool"
 ]
 resolver = "2"
