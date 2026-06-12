@@ -1,0 +1,11 @@
+{
+  "avg_job_parse_secs": 3.3312889999999997e-6,
+  "avg_share_verify_secs": 9.200132699999999e-6,
+  "avg_work_package_creation_secs": 7.108325e-6,
+  "backend": "native-cpu",
+  "duration_secs": 5.033925772,
+  "hashrate": 107272.14195402323,
+  "threads": 4,
+  "timestamp": "2026-06-12T10:44:57.657359194+00:00",
+  "unit": "H/s"
+}

@@ -1,5 +1,12 @@
 wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
 worker_name = "worker1"
 pool_url = "stratum+tcp://pearlpool.cloud:5566"
-miner_binary_path = "/bin/echo"
-args = ["Hello", "World!"]
+mode = "native-cpu"
+backend = "cpu"
+algo = "pearl"
+miner_binary_path = "/usr/bin/miner"
+args = ["--algo", "pearl", "--pool", "stratum+tcp://pearlpool.cloud:5566"]
+threads = 0
+deterministic = false
+benchmark = false
+dry_run = false

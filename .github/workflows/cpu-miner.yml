@@ -1,0 +1,37 @@
+name: CPU Miner CI
+
+on:
+  push:
+    branches: [ main, consolidated-native-cpu ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+    - name: Run tests
+      run: cargo test --workspace
+    - name: Run clippy
+      run: cargo clippy --workspace -- -D warnings
+    - name: Check format
+      run: cargo fmt --all -- --check
+    - name: Run benchmark
+      run: cargo run --bin miner-cli -- --benchmark-native-cpu
+    - name: Upload benchmark report
+      uses: actions/upload-artifact@v3
+      if: github.event_name == 'workflow_dispatch'
+      with:
+        name: benchmark-report-${{ matrix.os }}
+        path: benchmark_report.json
