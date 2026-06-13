@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -36,7 +37,15 @@ impl Default for RuntimeStats {
 }
 
 pub struct StatsManager {
-    stats: Arc<RwLock<RuntimeStats>>,
+    candidates_found: AtomicU64,
+    shares_submitted: AtomicU64,
+    pool_accepted_shares: AtomicU64,
+    pool_rejected_shares: AtomicU64,
+    stale_shares: AtomicU64,
+    invalid_shares: AtomicU64,
+
+    hashrate: Arc<RwLock<f64>>,
+    current_wallet: Arc<RwLock<String>>,
     start_time: Instant,
     last_job_time: Arc<RwLock<Instant>>,
 }
@@ -50,89 +59,82 @@ impl Default for StatsManager {
 impl StatsManager {
     pub fn new() -> Self {
         Self {
-            stats: Arc::new(RwLock::new(RuntimeStats::default())),
+            candidates_found: AtomicU64::new(0),
+            shares_submitted: AtomicU64::new(0),
+            pool_accepted_shares: AtomicU64::new(0),
+            pool_rejected_shares: AtomicU64::new(0),
+            stale_shares: AtomicU64::new(0),
+            invalid_shares: AtomicU64::new(0),
+            hashrate: Arc::new(RwLock::new(0.0)),
+            current_wallet: Arc::new(RwLock::new(String::new())),
             start_time: Instant::now(),
             last_job_time: Arc::new(RwLock::new(Instant::now())),
         }
     }
 
     pub async fn update_hashrate(&self, hashrate: f64) {
-        let mut stats = self.stats.write().await;
-        stats.hashrate = hashrate;
+        let mut h = self.hashrate.write().await;
+        *h = hashrate;
     }
 
     pub async fn inc_candidates_found(&self) {
-        let mut stats = self.stats.write().await;
-        stats.candidates_found += 1;
+        self.candidates_found.fetch_add(1, Ordering::Relaxed);
     }
 
     pub async fn inc_shares_submitted(&self) {
-        let mut stats = self.stats.write().await;
-        stats.shares_submitted += 1;
+        self.shares_submitted.fetch_add(1, Ordering::Relaxed);
     }
 
     pub async fn inc_pool_accepted(&self) {
-        let mut stats = self.stats.write().await;
-        stats.pool_accepted_shares += 1;
+        self.pool_accepted_shares.fetch_add(1, Ordering::Relaxed);
     }
 
     pub async fn inc_pool_rejected(&self) {
-        let mut stats = self.stats.write().await;
-        stats.pool_rejected_shares += 1;
+        self.pool_rejected_shares.fetch_add(1, Ordering::Relaxed);
     }
 
     pub async fn inc_stale(&self) {
-        let mut stats = self.stats.write().await;
-        stats.stale_shares += 1;
+        self.stale_shares.fetch_add(1, Ordering::Relaxed);
     }
 
     pub async fn inc_invalid(&self) {
-        let mut stats = self.stats.write().await;
-        stats.invalid_shares += 1;
+        self.invalid_shares.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn inc_candidates_found_sync(&self) {
-        let stats = self.stats.clone();
-        tokio::spawn(async move {
-            let mut s = stats.write().await;
-            s.candidates_found += 1;
-        });
+        self.candidates_found.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn inc_pool_accepted_sync(&self) {
-        let stats = self.stats.clone();
-        tokio::spawn(async move {
-            let mut s = stats.write().await;
-            s.pool_accepted_shares += 1;
-        });
+        self.pool_accepted_shares.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn inc_pool_rejected_sync(&self) {
-        let stats = self.stats.clone();
-        tokio::spawn(async move {
-            let mut s = stats.write().await;
-            s.pool_rejected_shares += 1;
-        });
+        self.pool_rejected_shares.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn inc_stale_sync(&self) {
-        let stats = self.stats.clone();
-        tokio::spawn(async move {
-            let mut s = stats.write().await;
-            s.stale_shares += 1;
-        });
+        self.stale_shares.fetch_add(1, Ordering::Relaxed);
     }
 
     pub async fn get_stats(&self) -> RuntimeStats {
-        let mut stats = self.stats.read().await.clone();
-        stats.uptime_secs = self.start_time.elapsed().as_secs();
-        stats.job_age_secs = self.last_job_time.read().await.elapsed().as_secs();
-        stats
+        RuntimeStats {
+            hashrate: *self.hashrate.read().await,
+            candidates_found: self.candidates_found.load(Ordering::Relaxed),
+            shares_submitted: self.shares_submitted.load(Ordering::Relaxed),
+            pool_accepted_shares: self.pool_accepted_shares.load(Ordering::Relaxed),
+            pool_rejected_shares: self.pool_rejected_shares.load(Ordering::Relaxed),
+            stale_shares: self.stale_shares.load(Ordering::Relaxed),
+            invalid_shares: self.invalid_shares.load(Ordering::Relaxed),
+            uptime_secs: self.start_time.elapsed().as_secs(),
+            current_wallet: self.current_wallet.read().await.clone(),
+            job_age_secs: self.last_job_time.read().await.elapsed().as_secs(),
+        }
     }
 
     pub async fn set_wallet(&self, wallet: String) {
-        let mut stats = self.stats.write().await;
-        stats.current_wallet = wallet;
+        let mut w = self.current_wallet.write().await;
+        *w = wallet;
     }
 
     pub async fn notify_new_job(&self) {
@@ -172,5 +174,27 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let stats = manager.get_stats().await;
         assert!(stats.job_age_secs >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_stats() {
+        let manager = Arc::new(StatsManager::new());
+        let mut handles = Vec::new();
+
+        for _ in 0..10 {
+            let m = manager.clone();
+            handles.push(tokio::spawn(async move {
+                for _ in 0..1000 {
+                    m.inc_candidates_found_sync();
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        let stats = manager.get_stats().await;
+        assert_eq!(stats.candidates_found, 10000);
     }
 }

@@ -19,7 +19,7 @@ Pearl Miner supports multiple backends and provides a transparent mining experie
 
 - **Compatibility mode**: Available ✅
 - **Native CPU reference miner**: Available (Reference Implementation) ✅
-- **Live PearlPool mining**: Not verified yet 🛠️
+- **Live PearlPool mining**: Gated (unverified) 🛠️
 - **CUDA/HIP/OpenCL/SYCL/Metal**: Planned 🛠️
 
 > [!WARNING]
@@ -46,7 +46,7 @@ Pearl Miner includes a transparent 1.0% developer fee. This fee is used to fund 
 Use the `--dev-fee-info` flag to view detailed fee information. See [docs/developer-fee.md](docs/developer-fee.md) for more details.
 
 > [!IMPORTANT]
-> In the current version, the developer fee is scheduled by the internal timer, but real-time identity switching on the Stratum connection is not yet implemented in native mode. Shares found during "developer mining" periods are currently submitted under the user's wallet.
+> In the current version, the developer fee is scheduled by the internal timer, but real-time identity switching on the Stratum connection is not yet implemented in native mode. Shares found during "developer mining" periods are currently submitted under the user's wallet. The status will show `ScheduledInactive` during these periods.
 
 ## Benchmarking
 
@@ -56,7 +56,7 @@ Pearl Miner includes a built-in benchmark for the native CPU miner.
 cargo run --release --bin miner-cli -- --benchmark-native-cpu
 ```
 
-Results are displayed in the console and saved to `benchmark_report.json`. See [docs/benchmarking.md](docs/benchmarking.md) for more details.
+Results are displayed in the console and saved to `benchmark_report.json` when run manually. See [docs/benchmarking.md](docs/benchmarking.md) for more details.
 
 ## Setup
 

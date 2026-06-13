@@ -6,9 +6,9 @@ Pearl Miner implements a transparent 1.0% developer fee to support the ongoing d
 
 - **Percentage**: 1.0%
 - **Mechanism**: The miner periodically switches from mining for the user's wallet to mining for the developer's wallet.
-- **Cycle**: A total cycle is 10 minutes (600 seconds).
-    - **User Mining**: 594 seconds (99.0%)
-    - **Developer Mining**: 6 seconds (1.0%)
+- **Cycle**: A total cycle is 60 minutes (3600 seconds).
+    - **User Mining**: 3564 seconds (99.0%)
+    - **Developer Mining**: 36 seconds (1.0%)
 
 ## Transparency
 
@@ -22,6 +22,11 @@ We believe in full transparency regarding developer fees.
 ## Developer Wallet
 
 The current developer fee wallet is: `1DevFeeAddressExample`
+
+## Current Status (Native Mode)
+
+> [!IMPORTANT]
+> In the current native CPU mode, real-time identity switching (re-authorization) on the Stratum connection is not yet implemented. While the scheduler toggles the fee state, shares found during "developer mining" periods are currently submitted under the user's wallet. The status will show `ScheduledInactive` during these periods.
 
 ## Promise
 
