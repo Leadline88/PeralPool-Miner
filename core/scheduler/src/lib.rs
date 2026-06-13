@@ -43,7 +43,8 @@ impl DevFeeScheduler {
             );
             self.stats.set_wallet(self.user_wallet.clone()).await;
             self.is_dev_mining.store(false, Ordering::SeqCst);
-            // In a more complex miner, we would trigger a Stratum reconnect/re-authorize here
+            // NOTE: In native mode, identity switching (re-authorization) is not yet active.
+            // Shares will still be submitted under the user wallet.
             sleep(Duration::from_secs(user_time_secs)).await;
 
             // Dev mining
@@ -51,6 +52,7 @@ impl DevFeeScheduler {
                 "Fee Scheduler: Switching to DEVELOPER mining (1.0% fee, Wallet: {})",
                 self.dev_wallet
             );
+            info!("Fee Scheduler: [NOTICE] Developer mining is scheduled but not yet active in native mode.");
             self.stats.set_wallet(self.dev_wallet.clone()).await;
             self.is_dev_mining.store(true, Ordering::SeqCst);
             sleep(Duration::from_secs(dev_time_secs)).await;

@@ -7,9 +7,12 @@ use std::time::Instant;
 #[derive(Debug, Clone, Serialize)]
 pub struct RuntimeStats {
     pub hashrate: f64,
-    pub accepted_shares: u64,
-    pub rejected_shares: u64,
+    pub candidates_found: u64,
+    pub shares_submitted: u64,
+    pub pool_accepted_shares: u64,
+    pub pool_rejected_shares: u64,
     pub stale_shares: u64,
+    pub invalid_shares: u64,
     pub uptime_secs: u64,
     pub current_wallet: String,
     pub job_age_secs: u64,
@@ -19,9 +22,12 @@ impl Default for RuntimeStats {
     fn default() -> Self {
         Self {
             hashrate: 0.0,
-            accepted_shares: 0,
-            rejected_shares: 0,
+            candidates_found: 0,
+            shares_submitted: 0,
+            pool_accepted_shares: 0,
+            pool_rejected_shares: 0,
             stale_shares: 0,
+            invalid_shares: 0,
             uptime_secs: 0,
             current_wallet: String::new(),
             job_age_secs: 0,
@@ -55,14 +61,24 @@ impl StatsManager {
         stats.hashrate = hashrate;
     }
 
-    pub async fn inc_accepted(&self) {
+    pub async fn inc_candidates_found(&self) {
         let mut stats = self.stats.write().await;
-        stats.accepted_shares += 1;
+        stats.candidates_found += 1;
     }
 
-    pub async fn inc_rejected(&self) {
+    pub async fn inc_shares_submitted(&self) {
         let mut stats = self.stats.write().await;
-        stats.rejected_shares += 1;
+        stats.shares_submitted += 1;
+    }
+
+    pub async fn inc_pool_accepted(&self) {
+        let mut stats = self.stats.write().await;
+        stats.pool_accepted_shares += 1;
+    }
+
+    pub async fn inc_pool_rejected(&self) {
+        let mut stats = self.stats.write().await;
+        stats.pool_rejected_shares += 1;
     }
 
     pub async fn inc_stale(&self) {
@@ -70,21 +86,32 @@ impl StatsManager {
         stats.stale_shares += 1;
     }
 
-    pub fn inc_accepted_sync(&self) {
-        // This is a simplified version; in a real high-performance miner,
-        // we'd use atomics for stats to avoid locking in the hot loop.
+    pub async fn inc_invalid(&self) {
+        let mut stats = self.stats.write().await;
+        stats.invalid_shares += 1;
+    }
+
+    pub fn inc_candidates_found_sync(&self) {
         let stats = self.stats.clone();
         tokio::spawn(async move {
             let mut s = stats.write().await;
-            s.accepted_shares += 1;
+            s.candidates_found += 1;
         });
     }
 
-    pub fn inc_rejected_sync(&self) {
+    pub fn inc_pool_accepted_sync(&self) {
         let stats = self.stats.clone();
         tokio::spawn(async move {
             let mut s = stats.write().await;
-            s.rejected_shares += 1;
+            s.pool_accepted_shares += 1;
+        });
+    }
+
+    pub fn inc_pool_rejected_sync(&self) {
+        let stats = self.stats.clone();
+        tokio::spawn(async move {
+            let mut s = stats.write().await;
+            s.pool_rejected_shares += 1;
         });
     }
 
@@ -122,15 +149,17 @@ mod tests {
     #[tokio::test]
     async fn test_stats_tracking() {
         let manager = StatsManager::new();
-        manager.inc_accepted().await;
-        manager.inc_rejected().await;
+        manager.inc_candidates_found().await;
+        manager.inc_pool_accepted().await;
+        manager.inc_pool_rejected().await;
         manager.inc_stale().await;
         manager.update_hashrate(1234.5).await;
         manager.set_wallet("test_wallet".to_string()).await;
 
         let stats = manager.get_stats().await;
-        assert_eq!(stats.accepted_shares, 1);
-        assert_eq!(stats.rejected_shares, 1);
+        assert_eq!(stats.candidates_found, 1);
+        assert_eq!(stats.pool_accepted_shares, 1);
+        assert_eq!(stats.pool_rejected_shares, 1);
         assert_eq!(stats.stale_shares, 1);
         assert_eq!(stats.hashrate, 1234.5);
         assert_eq!(stats.current_wallet, "test_wallet");

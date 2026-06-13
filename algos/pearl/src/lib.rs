@@ -111,4 +111,23 @@ mod tests {
             "Should have found a valid nonce in 1000 attempts with 50% target"
         );
     }
+
+    #[test]
+    fn test_regression_not_placeholder() {
+        let algo = PearlAlgorithm;
+        let job_json = r#"{"id":"test","blob":"00112233445566778899aabbccddeeff","target":1000}"#;
+        let job = algo.parse_job(job_json).unwrap();
+        assert_eq!(job.id, "test");
+        assert_eq!(job.target, 1000);
+
+        let work = algo.create_work(
+            &job,
+            mining::NonceRange {
+                start: 0,
+                end: 100,
+            },
+        );
+        assert_eq!(work.job_id, "test");
+        assert_eq!(work.blob.len(), 16);
+    }
 }

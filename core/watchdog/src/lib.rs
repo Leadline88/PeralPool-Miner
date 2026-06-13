@@ -92,14 +92,19 @@ impl Watchdog {
                     error!("Watchdog: Failed to start miner: {}", e);
 
                     let now = Instant::now();
-                    state.restart_timestamps.retain(|&t| now.duration_since(t) < config.window_duration);
+                    state
+                        .restart_timestamps
+                        .retain(|&t| now.duration_since(t) < config.window_duration);
                     if state.restart_timestamps.len() >= config.max_restarts_per_window {
                         error!("Watchdog: Start limit reached. Giving up.");
                         break;
                     }
                     state.restart_timestamps.push(now);
 
-                    info!("Watchdog: Retrying in {} seconds...", config.restart_delay.as_secs());
+                    info!(
+                        "Watchdog: Retrying in {} seconds...",
+                        config.restart_delay.as_secs()
+                    );
                     sleep(config.restart_delay).await;
                 }
             }
@@ -125,13 +130,20 @@ mod tests {
 
         // Simulate 3 rapid crashes
         for _ in 0..3 {
-            state.restart_timestamps.retain(|&t| now.duration_since(t) < config.window_duration);
+            state
+                .restart_timestamps
+                .retain(|&t| now.duration_since(t) < config.window_duration);
             assert!(state.restart_timestamps.len() < config.max_restarts_per_window);
             state.restart_timestamps.push(Instant::now());
         }
 
         // The 4th crash should trigger the limit
-        state.restart_timestamps.retain(|&t| now.duration_since(t) < config.window_duration);
-        assert_eq!(state.restart_timestamps.len(), config.max_restarts_per_window);
+        state
+            .restart_timestamps
+            .retain(|&t| now.duration_since(t) < config.window_duration);
+        assert_eq!(
+            state.restart_timestamps.len(),
+            config.max_restarts_per_window
+        );
     }
 }

@@ -28,6 +28,7 @@ pub struct ShareResult {
 }
 
 pub struct ShareTracker {
+    pub submitted_count: u64,
     pub accepted_count: u64,
     pub rejected_count: u64,
     pub stale_count: u64,
@@ -40,6 +41,7 @@ pub struct ShareTracker {
 impl ShareTracker {
     pub fn new() -> Self {
         Self {
+            submitted_count: 0,
             accepted_count: 0,
             rejected_count: 0,
             stale_count: 0,
@@ -48,6 +50,10 @@ impl ShareTracker {
             last_rejected: None,
             current_difficulty: 0.0,
         }
+    }
+
+    pub fn record_submission(&mut self) {
+        self.submitted_count += 1;
     }
 
     pub fn record_result(&mut self, result: &ShareResult) {

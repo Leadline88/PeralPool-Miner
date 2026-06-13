@@ -2,9 +2,9 @@ name: CPU Miner CI
 
 on:
   push:
-    branches: [ main, consolidated-native-cpu ]
+    branches: [ main, master, consolidated-native-cpu ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:

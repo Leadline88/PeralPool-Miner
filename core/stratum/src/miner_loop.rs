@@ -2,6 +2,7 @@ use crate::adapter::PoolAdapter;
 use crate::client::{StratumClient, StratumEvent};
 use chrono::Utc;
 use shares::{ShareCandidate, ShareResult, ShareStatus, ShareTracker};
+use stats::StatsManager;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -12,6 +13,7 @@ pub struct MinerLoop {
     adapter: Arc<dyn PoolAdapter>,
     wallet: String,
     worker: String,
+    stats: Arc<StatsManager>,
     share_tracker: Arc<tokio::sync::Mutex<ShareTracker>>,
 }
 
@@ -21,12 +23,14 @@ impl MinerLoop {
         adapter: Arc<dyn PoolAdapter>,
         wallet: String,
         worker: String,
+        stats: Arc<StatsManager>,
     ) -> Self {
         Self {
             client,
             adapter,
             wallet,
             worker,
+            stats,
             share_tracker: Arc::new(tokio::sync::Mutex::new(ShareTracker::new())),
         }
     }
@@ -115,6 +119,12 @@ impl MinerLoop {
                 }
                 Some(share) = share_rx.recv() => {
                     info!("Miner loop: Submitting share for job {}", share.job_id);
+                    self.stats.inc_shares_submitted().await;
+                    {
+                        let mut tracker = self.share_tracker.lock().await;
+                        tracker.record_submission();
+                    }
+
                     let start = Utc::now();
                     let current_diff = {
                         let tracker = self.share_tracker.lock().await;
@@ -127,6 +137,7 @@ impl MinerLoop {
                             match self.adapter.parse_share_response(&res) {
                                 Ok(true) => {
                                     info!("Share accepted ({}ms)", latency);
+                                    self.stats.inc_pool_accepted().await;
                                     ShareResult {
                                         candidate: share,
                                         status: ShareStatus::Accepted,
@@ -137,6 +148,7 @@ impl MinerLoop {
                                 }
                                 Ok(false) => {
                                     warn!("Share rejected ({}ms)", latency);
+                                    self.stats.inc_pool_rejected().await;
                                     ShareResult {
                                         candidate: share,
                                         status: ShareStatus::Rejected,
@@ -147,6 +159,7 @@ impl MinerLoop {
                                 }
                                 Err(e) => {
                                     error!("Failed to parse share response: {}", e);
+                                    self.stats.inc_invalid().await;
                                     ShareResult {
                                         candidate: share,
                                         status: ShareStatus::Invalid,
@@ -159,6 +172,7 @@ impl MinerLoop {
                         }
                         Err(e) => {
                             error!("Failed to submit share: {}", e);
+                            self.stats.inc_stale().await;
                             ShareResult {
                                 candidate: share,
                                 status: ShareStatus::Stale, // Or connection error
