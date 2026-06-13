@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 mining = { path = "../../core/mining" }
 algo-pearl = { path = "../../algos/pearl" }
+devfee = { path = "../../core/devfee" }
 stats = { path = "../../core/stats" }
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }

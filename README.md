@@ -18,7 +18,8 @@ Pearl Miner supports multiple backends and provides a transparent mining experie
 ## Current Status
 
 - **Compatibility mode**: Available ✅
-- **Native CPU reference miner**: Available (Reference Implementation) ✅
+- **Native CPU reference miner**: Available (Synthetic Implementation) ✅
+- **Real Pearl Algorithm**: Not implemented ❌
 - **Live PearlPool mining**: Gated (unverified) 🛠️
 - **CUDA/HIP/OpenCL/SYCL/Metal**: Planned 🛠️
 

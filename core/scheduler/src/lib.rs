@@ -1,30 +1,10 @@
-use devfee::{DEFAULT_DEV_FEE, DEFAULT_DEV_WALLET};
-use serde::Serialize;
+use devfee::{DevFeeState, DEFAULT_DEV_FEE, DEFAULT_DEV_WALLET};
 use stats::StatsManager;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub enum DevFeeState {
-    Disabled,
-    ScheduledInactive,
-    ActiveUserMining,
-    ActiveDeveloperMining,
-}
-
-impl std::fmt::Display for DevFeeState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DevFeeState::Disabled => write!(f, "Disabled"),
-            DevFeeState::ScheduledInactive => write!(f, "ScheduledInactive"),
-            DevFeeState::ActiveUserMining => write!(f, "ActiveUserMining"),
-            DevFeeState::ActiveDeveloperMining => write!(f, "ActiveDeveloperMining"),
-        }
-    }
-}
 
 pub struct DevFeeScheduler {
     user_wallet: String,

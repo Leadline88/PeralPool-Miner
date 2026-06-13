@@ -77,27 +77,27 @@ impl StatsManager {
         *h = hashrate;
     }
 
-    pub async fn inc_candidates_found(&self) {
+    pub fn inc_candidates_found(&self) {
         self.candidates_found.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub async fn inc_shares_submitted(&self) {
+    pub fn inc_shares_submitted(&self) {
         self.shares_submitted.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub async fn inc_pool_accepted(&self) {
+    pub fn inc_pool_accepted(&self) {
         self.pool_accepted_shares.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub async fn inc_pool_rejected(&self) {
+    pub fn inc_pool_rejected(&self) {
         self.pool_rejected_shares.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub async fn inc_stale(&self) {
+    pub fn inc_stale(&self) {
         self.stale_shares.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub async fn inc_invalid(&self) {
+    pub fn inc_invalid(&self) {
         self.invalid_shares.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -151,10 +151,10 @@ mod tests {
     #[tokio::test]
     async fn test_stats_tracking() {
         let manager = StatsManager::new();
-        manager.inc_candidates_found().await;
-        manager.inc_pool_accepted().await;
-        manager.inc_pool_rejected().await;
-        manager.inc_stale().await;
+        manager.inc_candidates_found();
+        manager.inc_pool_accepted();
+        manager.inc_pool_rejected();
+        manager.inc_stale();
         manager.update_hashrate(1234.5).await;
         manager.set_wallet("test_wallet".to_string()).await;
 
