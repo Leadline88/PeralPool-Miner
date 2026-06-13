@@ -27,3 +27,44 @@ pub struct NonceRange {
     pub start: u64,
     pub end: u64,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MiningTargetType {
+    User,
+    Developer,
+}
+
+impl std::fmt::Display for MiningTargetType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MiningTargetType::User => write!(f, "USER"),
+            MiningTargetType::Developer => write!(f, "DEVELOPER"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveMiningIdentity {
+    pub wallet: String,
+    pub worker: String,
+    pub target_type: MiningTargetType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum DevFeeState {
+    Disabled,
+    ScheduledInactive,
+    ActiveUserMining,
+    ActiveDeveloperMining,
+}
+
+impl std::fmt::Display for DevFeeState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DevFeeState::Disabled => write!(f, "Disabled"),
+            DevFeeState::ScheduledInactive => write!(f, "ScheduledInactive"),
+            DevFeeState::ActiveUserMining => write!(f, "ActiveUserMining"),
+            DevFeeState::ActiveDeveloperMining => write!(f, "ActiveDeveloperMining"),
+        }
+    }
+}

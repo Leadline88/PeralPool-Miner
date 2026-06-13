@@ -51,7 +51,16 @@ impl DevFeeScheduler {
                 "Fee Scheduler: Switching to USER mining (Wallet: {})",
                 self.user_wallet
             );
-            self.stats.set_wallet(self.user_wallet.clone()).await;
+            self.stats
+                .set_identity(mining::ActiveMiningIdentity {
+                    wallet: self.user_wallet.clone(),
+                    worker: "worker1".to_string(), // Default worker for now
+                    target_type: mining::MiningTargetType::User,
+                })
+                .await;
+            self.stats
+                .set_dev_fee_state(DevFeeState::ActiveUserMining)
+                .await;
             self.is_dev_mining.store(false, Ordering::SeqCst);
 
             sleep(Duration::from_secs(user_time_secs)).await;
@@ -68,9 +77,22 @@ impl DevFeeScheduler {
                 self.dev_wallet
             );
             info!("Fee Scheduler: [NOTICE] Developer mining is scheduled but not yet active in native mode.");
+            info!("Fee Scheduler: Developer fee window scheduled, but native identity switching is not active; continuing under user wallet.");
 
-            self.stats.set_wallet(self.dev_wallet.clone()).await;
-            self.is_dev_mining.store(true, Ordering::SeqCst);
+            // During ScheduledInactive, we do NOT change the identity to developer wallet.
+            // We keep using the user wallet.
+            self.stats
+                .set_identity(mining::ActiveMiningIdentity {
+                    wallet: self.user_wallet.clone(),
+                    worker: "worker1".to_string(),
+                    target_type: mining::MiningTargetType::User,
+                })
+                .await;
+            self.stats
+                .set_dev_fee_state(DevFeeState::ScheduledInactive)
+                .await;
+            // Also ensure is_dev_mining is false because we are not actually mining to dev wallet
+            self.is_dev_mining.store(false, Ordering::SeqCst);
 
             sleep(Duration::from_secs(dev_time_secs)).await;
         }
@@ -130,7 +152,8 @@ mod tests {
                     let mut state = scheduler_clone.state.write().unwrap();
                     *state = DevFeeState::ScheduledInactive;
                 }
-                scheduler_clone.is_dev_mining.store(true, Ordering::SeqCst);
+                // In the new logic, is_dev_mining stays false during ScheduledInactive
+                scheduler_clone.is_dev_mining.store(false, Ordering::SeqCst);
                 sleep(Duration::from_secs(dev_time_secs)).await;
             }
         });
@@ -141,6 +164,7 @@ mod tests {
 
         sleep(Duration::from_secs(1)).await;
         assert_eq!(scheduler.get_state(), DevFeeState::ScheduledInactive);
-        assert_eq!(is_dev_mining.load(Ordering::SeqCst), true);
+        // Now it should be false even during ScheduledInactive
+        assert_eq!(is_dev_mining.load(Ordering::SeqCst), false);
     }
 }

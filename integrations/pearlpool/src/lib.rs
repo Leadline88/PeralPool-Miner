@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use shares::ShareCandidate;
-use stratum::{JsonRpcRequest, JsonRpcResponse, PoolAdapter};
+use stratum::{JsonRpcRequest, JsonRpcResponse, PoolAdapter, PoolAdapterError};
 
 pub const DEFAULT_POOL_URL: &str = "stratum+tcp://pearlpool.cloud:5566";
 pub const DEFAULT_PORT: u16 = 5566;
@@ -101,26 +101,12 @@ impl PoolAdapter for PearlPoolAdapter {
         }
     }
 
-    fn build_share_submit(&self, share: &ShareCandidate) -> JsonRpcRequest {
-        if !self.allow_experimental {
-            // Return a dummy request that will fail verification if somehow called
-            return JsonRpcRequest {
-                id: None,
-                method: "mining.unsupported_real_pearl_share_submit_format".to_string(),
-                params: json!([]),
-            };
-        }
-        JsonRpcRequest {
-            id: None,
-            method: "mining.submit".to_string(),
-            params: json!([
-                share.worker,
-                share.job_id,
-                "0x00000000",
-                share.timestamp.to_rfc3339(),
-                share.nonce
-            ]),
-        }
+    fn build_share_submit(
+        &self,
+        _share: &ShareCandidate,
+    ) -> Result<JsonRpcRequest, PoolAdapterError> {
+        // Even if allow_experimental is true, we don't have a verified submit format yet.
+        Err(PoolAdapterError::UnsupportedRealPearlShareSubmitFormat)
     }
 
     fn parse_share_response(&self, response: &JsonRpcResponse) -> Result<bool, String> {
@@ -228,8 +214,15 @@ mod tests {
             timestamp: chrono::Utc::now(),
         };
 
-        let req = adapter.build_share_submit(&share);
-        assert_eq!(req.method, "mining.submit");
+        let res = adapter.build_share_submit(&share);
+        assert!(res.is_err());
+        match res.err().unwrap() {
+            PoolAdapterError::UnsupportedRealPearlShareSubmitFormat => (),
+            e => panic!(
+                "Expected UnsupportedRealPearlShareSubmitFormat, got {:?}",
+                e
+            ),
+        }
     }
 
     #[test]

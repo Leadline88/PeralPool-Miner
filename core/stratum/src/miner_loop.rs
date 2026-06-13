@@ -130,52 +130,67 @@ impl MinerLoop {
                         let tracker = self.share_tracker.lock().await;
                         tracker.current_difficulty
                     };
-                    let submit_req = self.adapter.build_share_submit(&share);
-                    let result = match self.client.send_request(submit_req).await {
-                        Ok(res) => {
-                            let latency = Utc::now().signed_duration_since(start).num_milliseconds() as u64;
-                            match self.adapter.parse_share_response(&res) {
-                                Ok(true) => {
-                                    info!("Share accepted ({}ms)", latency);
-                                    self.stats.inc_pool_accepted();
-                                    ShareResult {
-                                        candidate: share,
-                                        status: ShareStatus::Accepted,
-                                        difficulty: current_diff,
-                                        latency_ms: latency,
-                                        error_message: None,
-                                    }
-                                }
-                                Ok(false) => {
-                                    warn!("Share rejected ({}ms)", latency);
-                                    self.stats.inc_pool_rejected();
-                                    ShareResult {
-                                        candidate: share,
-                                        status: ShareStatus::Rejected,
-                                        difficulty: current_diff,
-                                        latency_ms: latency,
-                                        error_message: Some("Rejected by pool".to_string()),
+
+                    let result = match self.adapter.build_share_submit(&share) {
+                        Ok(submit_req) => {
+                            match self.client.send_request(submit_req).await {
+                                Ok(res) => {
+                                    let latency = Utc::now().signed_duration_since(start).num_milliseconds() as u64;
+                                    match self.adapter.parse_share_response(&res) {
+                                        Ok(true) => {
+                                            info!("Share accepted ({}ms)", latency);
+                                            self.stats.inc_pool_accepted();
+                                            ShareResult {
+                                                candidate: share,
+                                                status: ShareStatus::Accepted,
+                                                difficulty: current_diff,
+                                                latency_ms: latency,
+                                                error_message: None,
+                                            }
+                                        }
+                                        Ok(false) => {
+                                            warn!("Share rejected ({}ms)", latency);
+                                            self.stats.inc_pool_rejected();
+                                            ShareResult {
+                                                candidate: share,
+                                                status: ShareStatus::Rejected,
+                                                difficulty: current_diff,
+                                                latency_ms: latency,
+                                                error_message: Some("Rejected by pool".to_string()),
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to parse share response: {}", e);
+                                            self.stats.inc_invalid();
+                                            ShareResult {
+                                                candidate: share,
+                                                status: ShareStatus::Invalid,
+                                                difficulty: current_diff,
+                                                latency_ms: latency,
+                                                error_message: Some(e),
+                                            }
+                                        }
                                     }
                                 }
                                 Err(e) => {
-                                    error!("Failed to parse share response: {}", e);
-                                    self.stats.inc_invalid();
+                                    error!("Failed to submit share: {}", e);
+                                    self.stats.inc_stale();
                                     ShareResult {
                                         candidate: share,
-                                        status: ShareStatus::Invalid,
+                                        status: ShareStatus::Stale, // Or connection error
                                         difficulty: current_diff,
-                                        latency_ms: latency,
-                                        error_message: Some(e),
+                                        latency_ms: 0,
+                                        error_message: Some(e.to_string()),
                                     }
                                 }
                             }
                         }
                         Err(e) => {
-                            error!("Failed to submit share: {}", e);
-                            self.stats.inc_stale();
+                            error!("Failed to build share submit request: {}", e);
+                            self.stats.inc_invalid();
                             ShareResult {
                                 candidate: share,
-                                status: ShareStatus::Stale, // Or connection error
+                                status: ShareStatus::Invalid,
                                 difficulty: current_diff,
                                 latency_ms: 0,
                                 error_message: Some(e.to_string()),

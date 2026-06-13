@@ -19,9 +19,11 @@ Pearl Miner supports multiple backends and provides a transparent mining experie
 
 - **Compatibility mode**: Available ✅
 - **Native CPU reference miner**: Available (Synthetic Implementation) ✅
-- **Real Pearl Algorithm**: Not implemented ❌
-- **Live PearlPool mining**: Gated (unverified) 🛠️
-- **CUDA/HIP/OpenCL/SYCL/Metal**: Planned 🛠️
+- **Real Pearl Algorithm**: Not implemented/verified ❌
+- **Live PearlPool jobs**: Experimental/Raw only 🛠️
+- **Live PearlPool share submission**: Unsupported until format verified 🛠️
+- **Developer Fee**: Scheduled but not active identity switching in native mode 🛠️
+- **GPU backends**: Planned only 🛠️
 
 > [!WARNING]
 > Native CPU mode is a reference implementation using a synthetic SHA256-based algorithm for proof-of-concept. It is not compatible with the real Pearl mainnet and is not performance-competitive with GPU miners.

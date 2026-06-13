@@ -13,10 +13,11 @@ The `core/stratum` crate provides a native Stratum V1 client implementation for 
 
 ## Mock vs Live PearlPool
 
-- **Mock Mode**: By default, the miner is verified using a `MockStratumServer` and a `MockPoolAdapter` for integration tests.
-- **Live Mode**: Live PearlPool native mining is currently **experimental and unverified**. The job format and share submission format for the real PearlPool have not been fully verified to match the synthetic reference implementation.
+- **Mock Mode**: By default, the miner is verified using a `MockStratumServer` and a `MockPoolAdapter` for integration tests. These components use a simplified JSON-RPC format for testing the miner loop and stats logic.
+- **Live Mode**: Live PearlPool native mining is currently **experimental and unverified**. The job format for the real PearlPool is not yet fully integrated.
+- **Unsupported Submit**: Even with `--allow-experimental-live-stratum`, live share submission to PearlPool is **disabled** because the binary submit format is not yet verified. The miner will log an error and record an "invalid share" if a submission is attempted.
 
-To enable experimental live mining, use the `--allow-experimental-live-stratum` flag.
+To enable experimental live mining (receiving jobs only), use the `--allow-experimental-live-stratum` flag.
 
 ## Handshake Flow
 

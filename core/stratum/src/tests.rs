@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod stratum_tests {
-    use crate::adapter::PoolAdapter;
+    use crate::adapter::{PoolAdapter, PoolAdapterError};
     use crate::client::{StratumClient, StratumEvent};
     use crate::miner_loop::MinerLoop;
     use crate::mock_server::MockStratumServer;
@@ -60,12 +60,15 @@ mod stratum_tests {
                 None
             }
         }
-        fn build_share_submit(&self, share: &ShareCandidate) -> crate::protocol::JsonRpcRequest {
-            crate::protocol::JsonRpcRequest {
+        fn build_share_submit(
+            &self,
+            share: &ShareCandidate,
+        ) -> Result<crate::protocol::JsonRpcRequest, PoolAdapterError> {
+            Ok(crate::protocol::JsonRpcRequest {
                 id: None,
                 method: "mining.submit".to_string(),
                 params: serde_json::json!([share.job_id, share.nonce]),
-            }
+            })
         }
         fn parse_share_response(
             &self,

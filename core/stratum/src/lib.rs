@@ -8,6 +8,6 @@ pub mod protocol;
 #[cfg(test)]
 mod tests;
 
-pub use adapter::PoolAdapter;
+pub use adapter::{PoolAdapter, PoolAdapterError};
 pub use client::StratumClient;
 pub use protocol::{JsonRpcRequest, JsonRpcResponse, StratumMessage};

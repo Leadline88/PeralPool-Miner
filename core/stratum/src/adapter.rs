@@ -1,6 +1,21 @@
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::Value;
 use shares::ShareCandidate;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum PoolAdapterError {
+    #[error("Unsupported real Pearl job format")]
+    UnsupportedRealPearlJobFormat,
+    #[error("Unsupported real Pearl share submit format")]
+    UnsupportedRealPearlShareSubmitFormat,
+    #[error("Experimental live Stratum is disabled")]
+    ExperimentalLiveStratumDisabled,
+    #[error("Invalid share candidate")]
+    InvalidShareCandidate,
+    #[error("Protocol error: {0}")]
+    ProtocolError(String),
+}
 
 pub trait PoolAdapter: Send + Sync {
     fn name(&self) -> &str;
@@ -13,6 +28,9 @@ pub trait PoolAdapter: Send + Sync {
     fn parse_job(&self, request: &JsonRpcRequest) -> Option<Value>;
     fn parse_difficulty(&self, request: &JsonRpcRequest) -> Option<f64>;
 
-    fn build_share_submit(&self, share: &ShareCandidate) -> JsonRpcRequest;
+    fn build_share_submit(
+        &self,
+        share: &ShareCandidate,
+    ) -> Result<JsonRpcRequest, PoolAdapterError>;
     fn parse_share_response(&self, response: &JsonRpcResponse) -> Result<bool, String>;
 }

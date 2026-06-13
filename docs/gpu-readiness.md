@@ -27,3 +27,9 @@ Real-time hashrate and candidate counts from GPU backends will be integrated int
 - Implementation of GPU-specific Pearl algorithm kernels.
 - Optimized memory transfer between Host and Device.
 - Auto-detection of available GPU hardware.
+
+## Warnings
+- **No GPU backends are currently implemented.**
+- All performance claims for future GPU backends are speculative.
+- The Pearl algorithm implementation in the current reference miner is unverified for mainnet.
+- Live PearlPool share submission is currently unsupported until the binary protocol format is verified.

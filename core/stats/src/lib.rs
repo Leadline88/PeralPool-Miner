@@ -1,3 +1,4 @@
+use mining::{ActiveMiningIdentity, DevFeeState, MiningTargetType};
 use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -16,6 +17,9 @@ pub struct RuntimeStats {
     pub invalid_shares: u64,
     pub uptime_secs: u64,
     pub current_wallet: String,
+    pub active_wallet_masked: String,
+    pub active_target_type: MiningTargetType,
+    pub dev_fee_state: DevFeeState,
     pub job_age_secs: u64,
 }
 
@@ -31,6 +35,9 @@ impl Default for RuntimeStats {
             invalid_shares: 0,
             uptime_secs: 0,
             current_wallet: String::new(),
+            active_wallet_masked: String::new(),
+            active_target_type: MiningTargetType::User,
+            dev_fee_state: DevFeeState::Disabled,
             job_age_secs: 0,
         }
     }
@@ -45,7 +52,8 @@ pub struct StatsManager {
     invalid_shares: AtomicU64,
 
     hashrate: Arc<RwLock<f64>>,
-    current_wallet: Arc<RwLock<String>>,
+    current_identity: Arc<RwLock<ActiveMiningIdentity>>,
+    dev_fee_state: Arc<RwLock<DevFeeState>>,
     start_time: Instant,
     last_job_time: Arc<RwLock<Instant>>,
 }
@@ -66,10 +74,22 @@ impl StatsManager {
             stale_shares: AtomicU64::new(0),
             invalid_shares: AtomicU64::new(0),
             hashrate: Arc::new(RwLock::new(0.0)),
-            current_wallet: Arc::new(RwLock::new(String::new())),
+            current_identity: Arc::new(RwLock::new(ActiveMiningIdentity {
+                wallet: String::new(),
+                worker: String::new(),
+                target_type: MiningTargetType::User,
+            })),
+            dev_fee_state: Arc::new(RwLock::new(DevFeeState::Disabled)),
             start_time: Instant::now(),
             last_job_time: Arc::new(RwLock::new(Instant::now())),
         }
+    }
+
+    fn mask_wallet(wallet: &str) -> String {
+        if wallet.len() <= 10 {
+            return wallet.to_string();
+        }
+        format!("{}...{}", &wallet[..6], &wallet[wallet.len() - 4..])
     }
 
     pub async fn update_hashrate(&self, hashrate: f64) {
@@ -118,6 +138,7 @@ impl StatsManager {
     }
 
     pub async fn get_stats(&self) -> RuntimeStats {
+        let identity = self.current_identity.read().await;
         RuntimeStats {
             hashrate: *self.hashrate.read().await,
             candidates_found: self.candidates_found.load(Ordering::Relaxed),
@@ -127,14 +148,22 @@ impl StatsManager {
             stale_shares: self.stale_shares.load(Ordering::Relaxed),
             invalid_shares: self.invalid_shares.load(Ordering::Relaxed),
             uptime_secs: self.start_time.elapsed().as_secs(),
-            current_wallet: self.current_wallet.read().await.clone(),
+            current_wallet: identity.wallet.clone(),
+            active_wallet_masked: Self::mask_wallet(&identity.wallet),
+            active_target_type: identity.target_type,
+            dev_fee_state: *self.dev_fee_state.read().await,
             job_age_secs: self.last_job_time.read().await.elapsed().as_secs(),
         }
     }
 
-    pub async fn set_wallet(&self, wallet: String) {
-        let mut w = self.current_wallet.write().await;
-        *w = wallet;
+    pub async fn set_identity(&self, identity: ActiveMiningIdentity) {
+        let mut id = self.current_identity.write().await;
+        *id = identity;
+    }
+
+    pub async fn set_dev_fee_state(&self, state: DevFeeState) {
+        let mut s = self.dev_fee_state.write().await;
+        *s = state;
     }
 
     pub async fn notify_new_job(&self) {
@@ -156,7 +185,13 @@ mod tests {
         manager.inc_pool_rejected();
         manager.inc_stale();
         manager.update_hashrate(1234.5).await;
-        manager.set_wallet("test_wallet".to_string()).await;
+        manager
+            .set_identity(ActiveMiningIdentity {
+                wallet: "1234567890abcdef".to_string(),
+                worker: "worker1".to_string(),
+                target_type: MiningTargetType::User,
+            })
+            .await;
 
         let stats = manager.get_stats().await;
         assert_eq!(stats.candidates_found, 1);
@@ -164,7 +199,9 @@ mod tests {
         assert_eq!(stats.pool_rejected_shares, 1);
         assert_eq!(stats.stale_shares, 1);
         assert_eq!(stats.hashrate, 1234.5);
-        assert_eq!(stats.current_wallet, "test_wallet");
+        assert_eq!(stats.current_wallet, "1234567890abcdef");
+        assert_eq!(stats.active_wallet_masked, "123456...cdef");
+        assert_eq!(stats.active_target_type, MiningTargetType::User);
     }
 
     #[tokio::test]

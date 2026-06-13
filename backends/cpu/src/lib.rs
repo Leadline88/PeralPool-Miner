@@ -14,7 +14,6 @@ pub struct CpuBackend {
     stats: Arc<StatsManager>,
     current_job: Arc<RwLock<Option<PearlJob>>>,
     cancel_tx: broadcast::Sender<()>,
-    fee_state: Arc<RwLock<DevFeeState>>,
     total_hashes: Arc<AtomicU64>,
     share_tx: mpsc::Sender<PearlShareCandidate>,
     worker_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
@@ -27,7 +26,6 @@ struct WorkerContext {
     job: PearlJob,
     cancel_rx: broadcast::Receiver<()>,
     stats: Arc<StatsManager>,
-    fee_state: Arc<RwLock<DevFeeState>>,
     total_hashes: Arc<AtomicU64>,
     share_tx: mpsc::Sender<PearlShareCandidate>,
     deterministic: bool,
@@ -37,7 +35,7 @@ impl CpuBackend {
     pub fn new(
         threads: usize,
         stats: Arc<StatsManager>,
-        fee_state: Arc<RwLock<DevFeeState>>,
+        _fee_state: Arc<RwLock<DevFeeState>>,
         deterministic: bool,
         share_tx: mpsc::Sender<PearlShareCandidate>,
     ) -> Self {
@@ -47,7 +45,6 @@ impl CpuBackend {
             stats,
             current_job: Arc::new(RwLock::new(None)),
             cancel_tx,
-            fee_state,
             total_hashes: Arc::new(AtomicU64::new(0)),
             share_tx,
             worker_handles: Arc::new(RwLock::new(Vec::new())),
@@ -87,12 +84,9 @@ impl CpuBackend {
             }
 
             if PearlVerifier::verify(&blob, nonce, ctx.job.target) {
-                let current_fee_state = *ctx.fee_state.read().await;
-                let target_type = if current_fee_state == DevFeeState::ActiveDeveloperMining {
-                    "DEVELOPER"
-                } else {
-                    "USER"
-                };
+                // In native CPU mode, we currently only support USER mining
+                // as identity switching is not yet implemented.
+                let target_type = "USER";
                 info!(
                     "Worker {}: Found candidate for {} at nonce {}",
                     ctx.id, target_type, nonce
@@ -182,7 +176,6 @@ impl MiningBackend for CpuBackend {
                 job: job.clone(),
                 cancel_rx: self.cancel_tx.subscribe(),
                 stats: self.stats.clone(),
-                fee_state: self.fee_state.clone(),
                 total_hashes: self.total_hashes.clone(),
                 share_tx: self.share_tx.clone(),
                 deterministic: self.deterministic,
@@ -211,7 +204,6 @@ mod tests {
     async fn test_nonce_partitioning_no_overlap() {
         let threads = 4;
         let _stats = Arc::new(StatsManager::new());
-        let _fee_state = Arc::new(RwLock::new(DevFeeState::ActiveUserMining));
         let (cancel_tx, _cancel_rx) = broadcast::channel::<()>(1);
 
         let scanned_nonces = Arc::new(Mutex::new(Vec::new()));
@@ -386,5 +378,49 @@ mod tests {
         // But since max_nonces is 100,000 and it yields every 1000, it should be done quickly.
         backend.stop().await.unwrap();
         assert_eq!(backend.active_worker_count().await, 0);
+    }
+
+    async fn run_deterministic_multithreaded(threads: usize) -> Vec<u64> {
+        let stats = Arc::new(StatsManager::new());
+        let fee_state = Arc::new(RwLock::new(DevFeeState::ActiveUserMining));
+        let (share_tx, mut share_rx) = mpsc::channel(1000);
+
+        let backend = CpuBackend::new(threads, stats, fee_state, true, share_tx);
+
+        // High target (easy to find shares)
+        let dummy_job =
+            r#"{"id":"1","blob":"00112233445566778899aabbccddeeff","target":18000000000000000000}"#;
+
+        backend.set_job(dummy_job).await.unwrap();
+
+        // Wait for workers to finish their 100,000 nonces
+        // Each worker does 100,000 / threads nonces approximately if partitioned?
+        // Wait up to 2 seconds
+        let start = std::time::Instant::now();
+        while start.elapsed().as_secs() < 2 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        let mut results = Vec::new();
+        while let Ok(candidate) = share_rx.try_recv() {
+            results.push(candidate.nonce);
+        }
+
+        backend.stop().await.unwrap();
+        results.sort();
+        results
+    }
+
+    #[tokio::test]
+    async fn test_deterministic_multithreaded_reproducibility() {
+        let results_2_threads_1 = run_deterministic_multithreaded(2).await;
+        let results_2_threads_2 = run_deterministic_multithreaded(2).await;
+        assert!(!results_2_threads_1.is_empty());
+        assert_eq!(results_2_threads_1, results_2_threads_2);
+
+        let results_4_threads_1 = run_deterministic_multithreaded(4).await;
+        let results_4_threads_2 = run_deterministic_multithreaded(4).await;
+        assert!(!results_4_threads_1.is_empty());
+        assert_eq!(results_4_threads_1, results_4_threads_2);
     }
 }
