@@ -2,3 +2,4 @@ target/
 **/*.rs.bk
 Cargo.lock
 test.log
+benchmark_report.json

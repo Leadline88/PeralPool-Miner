@@ -2,14 +2,44 @@ use async_trait::async_trait;
 use mining::{MiningAlgorithm, NonceRange};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use thiserror::Error;
 
 pub type PearlTarget = u64;
+
+#[derive(Error, Debug)]
+pub enum PearlAlgorithmError {
+    #[error("Unsupported real Pearl job format: {0}")]
+    UnsupportedRealPearlJobFormat(String),
+    #[error("Unsupported real Pearl share submit format")]
+    UnsupportedRealPearlShareSubmitFormat,
+    #[error("Invalid job data: {0}")]
+    InvalidJobData(String),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PearlJob {
     pub id: String,
     pub blob: String,
     pub target: PearlTarget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PearlPoolNotify {
+    pub job_id: String,
+    pub prevhash: String,
+    pub coinb1: String,
+    pub coinb2: String,
+    pub merkle_branch: Vec<String>,
+    pub version: String,
+    pub nbits: String,
+    pub ntime: String,
+    pub clean_jobs: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawPoolJob {
+    pub method: String,
+    pub params: serde_json::Value,
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +91,12 @@ impl MiningAlgorithm for PearlAlgorithm {
     type ShareCandidate = PearlShareCandidate;
 
     fn parse_job(&self, data: &str) -> Result<Self::Job, String> {
-        serde_json::from_str(data).map_err(|e| e.to_string())
+        // Attempt to parse as synthetic job first
+        if let Ok(job) = serde_json::from_str::<PearlJob>(data) {
+            return Ok(job);
+        }
+
+        Err(PearlAlgorithmError::UnsupportedRealPearlJobFormat(data.to_string()).to_string())
     }
 
     fn create_work(&self, job: &Self::Job, range: NonceRange) -> Self::WorkPackage {
@@ -120,13 +155,7 @@ mod tests {
         assert_eq!(job.id, "test");
         assert_eq!(job.target, 1000);
 
-        let work = algo.create_work(
-            &job,
-            mining::NonceRange {
-                start: 0,
-                end: 100,
-            },
-        );
+        let work = algo.create_work(&job, mining::NonceRange { start: 0, end: 100 });
         assert_eq!(work.job_id, "test");
         assert_eq!(work.blob.len(), 16);
     }

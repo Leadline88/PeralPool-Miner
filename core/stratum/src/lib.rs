@@ -1,6 +1,7 @@
 pub mod adapter;
 pub mod client;
 pub mod miner_loop;
+pub mod mock_adapter;
 pub mod mock_server;
 pub mod protocol;
 

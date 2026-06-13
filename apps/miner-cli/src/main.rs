@@ -9,7 +9,7 @@ use scheduler::DevFeeScheduler;
 use stats::StatsManager;
 use std::path::PathBuf;
 use std::process::exit;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use stratum::client::StratumClient;
 use stratum::miner_loop::MinerLoop;
@@ -80,6 +80,10 @@ struct Args {
     /// Path to config file
     #[arg(short, long, default_value = "config.toml")]
     config: PathBuf,
+
+    /// Allow experimental live Stratum mining (unverified)
+    #[arg(long)]
+    allow_experimental_live_stratum: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -242,8 +246,11 @@ async fn main() {
 
             let stats = Arc::new(StatsManager::new());
             let is_dev_mining = Arc::new(AtomicBool::new(false));
-            let scheduler =
-                DevFeeScheduler::new(config.wallet.clone(), stats.clone(), is_dev_mining.clone());
+            let scheduler = Arc::new(DevFeeScheduler::new(
+                config.wallet.clone(),
+                stats.clone(),
+                is_dev_mining.clone(),
+            ));
             let threads = if config.threads > 0 {
                 config.threads
             } else {
@@ -260,15 +267,16 @@ async fn main() {
                 share_tx,
             ));
 
+            let scheduler_clone = scheduler.clone();
             let scheduler_handle = tokio::spawn(async move {
-                scheduler.run().await;
+                scheduler_clone.run().await;
             });
 
             backend.start().await.expect("Failed to start backend");
 
             // Stratum Client setup
             let cancel_token = CancellationToken::new();
-            let adapter = Arc::new(PearlPoolAdapter);
+            let adapter = Arc::new(PearlPoolAdapter::new(args.allow_experimental_live_stratum));
             let client = StratumClient::new(&config.pool_url, adapter.clone());
             let miner_loop = Arc::new(MinerLoop::new(
                 client.clone(),
@@ -320,9 +328,17 @@ async fn main() {
 
             // Status display loop
             let stats_clone = stats.clone();
-            let is_dev_mining_clone = is_dev_mining.clone();
+            let scheduler_status_clone = scheduler.clone();
             let backend_status_clone = backend.clone();
             let start_time = Utc::now();
+            let config_mode = config.mode;
+            let config_backend = config.backend;
+            let is_live = if args.allow_experimental_live_stratum {
+                "live (experimental)"
+            } else {
+                "synthetic/reference"
+            };
+
             tokio::spawn(async move {
                 let mut total_hashes = 0.0;
                 let mut status_count = 0;
@@ -337,14 +353,14 @@ async fn main() {
                     let hashrate = hashes / 10.0;
                     let avg_hashrate = total_hashes / (status_count as f64 * 10.0);
 
-                    let target_type = if is_dev_mining_clone.load(Ordering::Relaxed) {
-                        "DEVELOPER"
-                    } else {
-                        "USER"
-                    };
+                    let dev_fee_state = scheduler_status_clone.get_state();
 
                     info!(
-                        "Status: {:.2} H/s (avg {:.2} H/s) | C: {} S: {} A: {} R: {} | Uptime: {} | Job Age: {}s | Target: {}",
+                        "Status: Mode: {:?} | Backend: {:?} | Type: {}",
+                        config_mode, config_backend, is_live
+                    );
+                    info!(
+                        "Status: {:.2} H/s (avg {:.2} H/s) | C: {} S: {} A: {} R: {} | Uptime: {} | Job Age: {}s | DevFee: {}",
                         hashrate,
                         avg_hashrate,
                         runtime_stats.candidates_found,
@@ -353,7 +369,7 @@ async fn main() {
                         runtime_stats.pool_rejected_shares,
                         format_duration(uptime),
                         runtime_stats.job_age_secs,
-                        target_type
+                        dev_fee_state
                     );
                 }
             });
@@ -530,8 +546,9 @@ fn print_dev_fee_info() {
     println!("Fee wallet: 1DevFeeAddressExample");
     println!("The developer fee is used to support the ongoing development of Pearl Miner.");
     println!("It is transparently integrated into the mining process.");
-    println!("");
-    println!("Current Status: Scheduled but not yet active in native mode.");
+    println!();
+    println!("Cycle: 3600s total (3564s user / 36s dev)");
+    println!("Current Status: ScheduledInactive (in native mode)");
     println!("In native-cpu mode, the scheduler toggles the fee state, but identity switching");
     println!("(re-authorization) on the Stratum connection is not yet implemented.");
     println!("Shares are currently always submitted under the user wallet.");

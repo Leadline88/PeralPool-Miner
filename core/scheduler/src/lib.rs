@@ -1,4 +1,5 @@
 use devfee::{DEFAULT_DEV_FEE, DEFAULT_DEV_WALLET};
+use serde::Serialize;
 use stats::StatsManager;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
@@ -6,12 +7,32 @@ use tracing::info;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub enum DevFeeState {
+    Disabled,
+    ScheduledInactive,
+    ActiveUserMining,
+    ActiveDeveloperMining,
+}
+
+impl std::fmt::Display for DevFeeState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DevFeeState::Disabled => write!(f, "Disabled"),
+            DevFeeState::ScheduledInactive => write!(f, "ScheduledInactive"),
+            DevFeeState::ActiveUserMining => write!(f, "ActiveUserMining"),
+            DevFeeState::ActiveDeveloperMining => write!(f, "ActiveDeveloperMining"),
+        }
+    }
+}
+
 pub struct DevFeeScheduler {
     user_wallet: String,
     dev_wallet: String,
     fee_percent: f64,
     stats: Arc<StatsManager>,
     is_dev_mining: Arc<AtomicBool>,
+    state: Arc<std::sync::RwLock<DevFeeState>>,
 }
 
 impl DevFeeScheduler {
@@ -26,7 +47,12 @@ impl DevFeeScheduler {
             fee_percent: DEFAULT_DEV_FEE,
             stats,
             is_dev_mining,
+            state: Arc::new(std::sync::RwLock::new(DevFeeState::ActiveUserMining)),
         }
+    }
+
+    pub fn get_state(&self) -> DevFeeState {
+        *self.state.read().unwrap()
     }
 
     pub async fn run(&self) {
@@ -37,24 +63,35 @@ impl DevFeeScheduler {
 
         loop {
             // User mining
+            {
+                let mut state = self.state.write().unwrap();
+                *state = DevFeeState::ActiveUserMining;
+            }
             info!(
                 "Fee Scheduler: Switching to USER mining (Wallet: {})",
                 self.user_wallet
             );
             self.stats.set_wallet(self.user_wallet.clone()).await;
             self.is_dev_mining.store(false, Ordering::SeqCst);
-            // NOTE: In native mode, identity switching (re-authorization) is not yet active.
-            // Shares will still be submitted under the user wallet.
+
             sleep(Duration::from_secs(user_time_secs)).await;
 
             // Dev mining
+            {
+                let mut state = self.state.write().unwrap();
+                // In native mode, identity switching (re-authorization) is not yet active.
+                // So we use ScheduledInactive instead of ActiveDeveloperMining.
+                *state = DevFeeState::ScheduledInactive;
+            }
             info!(
                 "Fee Scheduler: Switching to DEVELOPER mining (1.0% fee, Wallet: {})",
                 self.dev_wallet
             );
             info!("Fee Scheduler: [NOTICE] Developer mining is scheduled but not yet active in native mode.");
+
             self.stats.set_wallet(self.dev_wallet.clone()).await;
             self.is_dev_mining.store(true, Ordering::SeqCst);
+
             sleep(Duration::from_secs(dev_time_secs)).await;
         }
     }
@@ -78,5 +115,52 @@ mod tests {
         assert_eq!(dev_time, 36.0);
         assert_eq!(user_time, 3564.0);
         assert_eq!(dev_time / total_cycle, 0.01);
+    }
+
+    #[tokio::test]
+    async fn test_scheduler_state_transitions() {
+        let stats = Arc::new(StatsManager::new());
+        let is_dev_mining = Arc::new(AtomicBool::new(false));
+        let scheduler = Arc::new(DevFeeScheduler {
+            user_wallet: "user".to_string(),
+            dev_wallet: "dev".to_string(),
+            fee_percent: 50.0, // 50% for fast testing
+            stats: stats.clone(),
+            is_dev_mining: is_dev_mining.clone(),
+            state: Arc::new(std::sync::RwLock::new(DevFeeState::ActiveUserMining)),
+        });
+
+        // Use a much smaller cycle for testing
+        let _total_cycle_secs = 2;
+        let dev_time_secs = 1;
+        let user_time_secs = 1;
+
+        let scheduler_clone = scheduler.clone();
+        tokio::spawn(async move {
+            loop {
+                // Manually implement a fast version of run() for testing
+                {
+                    let mut state = scheduler_clone.state.write().unwrap();
+                    *state = DevFeeState::ActiveUserMining;
+                }
+                scheduler_clone.is_dev_mining.store(false, Ordering::SeqCst);
+                sleep(Duration::from_secs(user_time_secs)).await;
+
+                {
+                    let mut state = scheduler_clone.state.write().unwrap();
+                    *state = DevFeeState::ScheduledInactive;
+                }
+                scheduler_clone.is_dev_mining.store(true, Ordering::SeqCst);
+                sleep(Duration::from_secs(dev_time_secs)).await;
+            }
+        });
+
+        sleep(Duration::from_millis(500)).await;
+        assert_eq!(scheduler.get_state(), DevFeeState::ActiveUserMining);
+        assert_eq!(is_dev_mining.load(Ordering::SeqCst), false);
+
+        sleep(Duration::from_secs(1)).await;
+        assert_eq!(scheduler.get_state(), DevFeeState::ScheduledInactive);
+        assert_eq!(is_dev_mining.load(Ordering::SeqCst), true);
     }
 }

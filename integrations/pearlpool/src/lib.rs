@@ -33,7 +33,15 @@ pub fn validate_credentials(wallet: &str, worker: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub struct PearlPoolAdapter;
+pub struct PearlPoolAdapter {
+    pub allow_experimental: bool,
+}
+
+impl PearlPoolAdapter {
+    pub fn new(allow_experimental: bool) -> Self {
+        Self { allow_experimental }
+    }
+}
 
 impl PoolAdapter for PearlPoolAdapter {
     fn name(&self) -> &str {
@@ -75,6 +83,10 @@ impl PoolAdapter for PearlPoolAdapter {
 
     fn parse_job(&self, request: &JsonRpcRequest) -> Option<Value> {
         if request.method == "mining.notify" {
+            if !self.allow_experimental {
+                tracing::error!("Live PearlPool native mining is not verified yet; use compatibility mode or synthetic CPU mode.");
+                return None;
+            }
             Some(request.params.clone())
         } else {
             None
@@ -90,6 +102,10 @@ impl PoolAdapter for PearlPoolAdapter {
     }
 
     fn build_share_submit(&self, share: &ShareCandidate) -> JsonRpcRequest {
+        if !self.allow_experimental {
+            // This should not be reachable if parse_job is gated, but for safety:
+            panic!("Live PearlPool share submission is not verified yet.");
+        }
         JsonRpcRequest {
             id: None,
             method: "mining.submit".to_string(),
@@ -197,7 +213,7 @@ mod tests {
     fn test_import_integrity() {
         // This test ensures that PearlPoolAdapter can be instantiated and implements PoolAdapter
         // which verifies the types from 'stratum' and 'shares' resolve correctly.
-        let adapter = PearlPoolAdapter;
+        let adapter = PearlPoolAdapter::new(true);
         assert_eq!(adapter.name(), "PearlPool");
 
         let share = ShareCandidate {
@@ -210,5 +226,16 @@ mod tests {
 
         let req = adapter.build_share_submit(&share);
         assert_eq!(req.method, "mining.submit");
+    }
+
+    #[test]
+    fn test_gating() {
+        let adapter = PearlPoolAdapter::new(false);
+        let notify = JsonRpcRequest {
+            id: None,
+            method: "mining.notify".to_string(),
+            params: json!([]),
+        };
+        assert!(adapter.parse_job(&notify).is_none());
     }
 }
