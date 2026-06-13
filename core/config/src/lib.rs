@@ -1,6 +1,34 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct Profile {
+    pub pool_url: String,
+    pub algo: String,
+    pub miner: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct MinerConfig {
+    pub binary_path: String,
+    pub args: Vec<String>,
+}
+
+impl MinerConfig {
+    pub fn expand_args(&self, wallet: &str, worker: &str, pool_url: &str, algo: &str) -> Vec<String> {
+        self.args
+            .iter()
+            .map(|arg| {
+                arg.replace("{wallet}", wallet)
+                    .replace("{worker}", worker)
+                    .replace("{pool_url}", pool_url)
+                    .replace("{algo}", algo)
+            })
+            .collect()
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -16,6 +44,8 @@ pub struct Config {
     pub deterministic: bool,
     pub benchmark: bool,
     pub dry_run: bool,
+    pub profiles: Option<HashMap<String, Profile>>,
+    pub miners: Option<HashMap<String, MinerConfig>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +82,8 @@ impl Default for Config {
             deterministic: false,
             benchmark: false,
             dry_run: false,
+            profiles: None,
+            miners: None,
         }
     }
 }
@@ -102,6 +134,81 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_placeholder_expansion() {
+        let miner = MinerConfig {
+            binary_path: "./miners/testminer".to_string(),
+            args: vec![
+                "--pool".to_string(),
+                "{pool_url}".to_string(),
+                "--wallet".to_string(),
+                "{wallet}".to_string(),
+                "--worker".to_string(),
+                "{worker}".to_string(),
+                "--algo".to_string(),
+                "{algo}".to_string(),
+            ],
+        };
+
+        let expanded = miner.expand_args(
+            "1WalletAddress",
+            "worker1",
+            "stratum+tcp://pool.com:1234",
+            "pearl",
+        );
+
+        assert_eq!(
+            expanded,
+            vec![
+                "--pool",
+                "stratum+tcp://pool.com:1234",
+                "--wallet",
+                "1WalletAddress",
+                "--worker",
+                "worker1",
+                "--algo",
+                "pearl"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_profiles_and_miners_parsing() {
+        let toml_str = r#"
+            wallet = "1A1z"
+            worker_name = "worker1"
+            pool_url = "tcp://pool"
+            mode = "compatibility"
+            backend = "cpu"
+            algo = "pearl"
+            miner_binary_path = ""
+            args = []
+            threads = 0
+            deterministic = false
+            benchmark = false
+            dry_run = false
+
+            [profiles.pearlpool]
+            pool_url = "stratum+tcp://pearlpool.cloud:5566"
+            algo = "pearl"
+            miner = "lpminer"
+
+            [miners.lpminer]
+            binary_path = "./miners/lpminer/lpminer.exe"
+            args = ["--pool", "{pool_url}", "--wallet", "{wallet}", "--worker", "{worker}"]
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.profiles.is_some());
+        assert!(config.miners.is_some());
+
+        let profiles = config.profiles.unwrap();
+        let miners = config.miners.unwrap();
+
+        assert_eq!(profiles.get("pearlpool").unwrap().miner, "lpminer");
+        assert_eq!(miners.get("lpminer").unwrap().binary_path, "./miners/lpminer/lpminer.exe");
+    }
 
     #[test]
     fn test_valid_config() {

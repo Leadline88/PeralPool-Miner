@@ -73,6 +73,10 @@ struct Args {
     #[arg(long)]
     dry_run: bool,
 
+    /// Profile to use from configuration
+    #[arg(long)]
+    profile: Option<String>,
+
     /// Path to config file
     #[arg(short, long, default_value = "config.toml")]
     config: PathBuf,
@@ -149,6 +153,34 @@ async fn main() {
     } else {
         Config::default()
     };
+
+    // Process profiles if specified
+    if let Some(profile_name) = &args.profile {
+        if let Some(profiles) = &config.profiles {
+            if let Some(profile) = profiles.get(profile_name) {
+                config.pool_url = profile.pool_url.clone();
+                config.algo = profile.algo.clone();
+
+                if let Some(miners) = &config.miners {
+                    if let Some(miner_config) = miners.get(&profile.miner) {
+                        config.miner_binary_path = miner_config.binary_path.clone();
+                        config.args = miner_config.expand_args(
+                            &config.wallet,
+                            &config.worker_name,
+                            &config.pool_url,
+                            &config.algo
+                        );
+                    }
+                }
+            } else {
+                error!("Profile '{}' not found in configuration.", profile_name);
+                exit(1);
+            }
+        } else {
+            error!("No profiles found in configuration.");
+            exit(1);
+        }
+    }
 
     // Override config with CLI arguments if provided
     if let Some(wallet) = args.wallet {

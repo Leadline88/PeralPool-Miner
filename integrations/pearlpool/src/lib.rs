@@ -3,7 +3,35 @@ use shares::ShareCandidate;
 use stratum::{JsonRpcRequest, JsonRpcResponse, PoolAdapter};
 
 pub const DEFAULT_POOL_URL: &str = "stratum+tcp://pearlpool.cloud:5566";
+pub const DEFAULT_PORT: u16 = 5566;
 pub const DEFAULT_ALGO: &str = "pearl";
+
+pub fn recommended_config() -> &'static str {
+    r#"
+[profiles.pearlpool]
+pool_url = "stratum+tcp://pearlpool.cloud:5566"
+algo = "pearl"
+miner = "lpminer"
+
+[miners.lpminer]
+binary_path = "./miners/lpminer/lpminer.exe"
+args = ["--pool", "{pool_url}", "--wallet", "{wallet}", "--worker", "{worker}"]
+
+[miners.srbminer]
+binary_path = "./miners/srbminer/SRBMiner-MULTI.exe"
+args = ["--algorithm", "pearl", "--pool", "{pool_url}", "--wallet", "{wallet}.{worker}"]
+"#
+}
+
+pub fn validate_credentials(wallet: &str, worker: &str) -> Result<(), String> {
+    if wallet.trim().is_empty() {
+        return Err("Wallet address cannot be empty".to_string());
+    }
+    if worker.trim().is_empty() {
+        return Err("Worker name cannot be empty".to_string());
+    }
+    Ok(())
+}
 
 pub struct PearlPoolAdapter;
 
@@ -88,4 +116,58 @@ impl PoolAdapter for PearlPoolAdapter {
 
 pub fn get_default_profile() -> String {
     format!("Pool URL: {}, Algo: {}", DEFAULT_POOL_URL, DEFAULT_ALGO)
+}
+
+pub fn build_lpminer_cmd(pool_url: &str, wallet: &str, worker: &str) -> (String, Vec<String>) {
+    (
+        "./miners/lpminer/lpminer.exe".to_string(),
+        vec![
+            "--pool".to_string(),
+            pool_url.to_string(),
+            "--wallet".to_string(),
+            wallet.to_string(),
+            "--worker".to_string(),
+            worker.to_string(),
+        ],
+    )
+}
+
+pub fn build_srbminer_cmd(pool_url: &str, wallet: &str, worker: &str) -> (String, Vec<String>) {
+    (
+        "./miners/srbminer/SRBMiner-MULTI.exe".to_string(),
+        vec![
+            "--algorithm".to_string(),
+            "pearl".to_string(),
+            "--pool".to_string(),
+            pool_url.to_string(),
+            "--wallet".to_string(),
+            format!("{}.{}", wallet, worker),
+        ],
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_credentials() {
+        assert!(validate_credentials("wallet123", "worker1").is_ok());
+        assert!(validate_credentials("", "worker1").is_err());
+        assert!(validate_credentials("wallet123", "").is_err());
+    }
+
+    #[test]
+    fn test_build_lpminer_cmd() {
+        let (binary, args) = build_lpminer_cmd("stratum+tcp://pearlpool.cloud:5566", "1Wallet", "worker1");
+        assert_eq!(binary, "./miners/lpminer/lpminer.exe");
+        assert_eq!(args, vec!["--pool", "stratum+tcp://pearlpool.cloud:5566", "--wallet", "1Wallet", "--worker", "worker1"]);
+    }
+
+    #[test]
+    fn test_build_srbminer_cmd() {
+        let (binary, args) = build_srbminer_cmd("stratum+tcp://pearlpool.cloud:5566", "1Wallet", "worker1");
+        assert_eq!(binary, "./miners/srbminer/SRBMiner-MULTI.exe");
+        assert_eq!(args, vec!["--algorithm", "pearl", "--pool", "stratum+tcp://pearlpool.cloud:5566", "--wallet", "1Wallet.worker1"]);
+    }
 }
