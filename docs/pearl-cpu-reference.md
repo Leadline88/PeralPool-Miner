@@ -12,7 +12,7 @@ The CPU miner is designed for:
 
 ## Implementation Details
 
-- **Algorithm**: Correctness-first reference implementation. Currently uses SHA256 as a placeholder for the final Pearl hash.
+- **Algorithm**: Correctness-first reference implementation. Currently uses a synthetic SHA256 as a placeholder for the final Pearl hash.
 - **Backend**: Multi-threaded using Tokio tasks.
 - **Nonce Partitioning**: Nonce ranges are partitioned across threads without overlap.
 - **Cancellation**: Workers are immediately cancelled when a new job arrives.

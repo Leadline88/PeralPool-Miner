@@ -11,6 +11,13 @@ The `core/stratum` crate provides a native Stratum V1 client implementation for 
 - **URL Prefix Handling**: Automatically strips `stratum+tcp://` from pool URLs.
 - **Event-Driven**: Broadcasts events like `Connected`, `Disconnected`, `Job`, and `Difficulty`.
 
+## Mock vs Live PearlPool
+
+- **Mock Mode**: By default, the miner is verified using a `MockStratumServer` and a `MockPoolAdapter` for integration tests.
+- **Live Mode**: Live PearlPool native mining is currently **experimental and unverified**. The job format and share submission format for the real PearlPool have not been fully verified to match the synthetic reference implementation.
+
+To enable experimental live mining, use the `--allow-experimental-live-stratum` flag.
+
 ## Handshake Flow
 
 The client follows the standard Stratum V1 handshake:

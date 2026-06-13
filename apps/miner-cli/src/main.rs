@@ -251,6 +251,7 @@ async fn main() {
                 stats.clone(),
                 is_dev_mining.clone(),
             ));
+            let fee_state = Arc::new(tokio::sync::RwLock::new(scheduler.get_state()));
             let threads = if config.threads > 0 {
                 config.threads
             } else {
@@ -262,13 +263,23 @@ async fn main() {
             let backend = Arc::new(CpuBackend::new(
                 threads,
                 stats.clone(),
-                is_dev_mining.clone(),
+                fee_state.clone(),
                 config.deterministic,
                 share_tx,
             ));
 
             let scheduler_clone = scheduler.clone();
+            let fee_state_updater = fee_state.clone();
             let scheduler_handle = tokio::spawn(async move {
+                // Update local fee_state periodically from scheduler
+                let scheduler_for_updater = scheduler_clone.clone();
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                        let mut state = fee_state_updater.write().await;
+                        *state = scheduler_for_updater.get_state();
+                    }
+                });
                 scheduler_clone.run().await;
             });
 

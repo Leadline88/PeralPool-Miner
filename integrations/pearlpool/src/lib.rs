@@ -103,8 +103,12 @@ impl PoolAdapter for PearlPoolAdapter {
 
     fn build_share_submit(&self, share: &ShareCandidate) -> JsonRpcRequest {
         if !self.allow_experimental {
-            // This should not be reachable if parse_job is gated, but for safety:
-            panic!("Live PearlPool share submission is not verified yet.");
+            // Return a dummy request that will fail verification if somehow called
+            return JsonRpcRequest {
+                id: None,
+                method: "mining.unsupported_real_pearl_share_submit_format".to_string(),
+                params: json!([]),
+            };
         }
         JsonRpcRequest {
             id: None,
