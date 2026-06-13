@@ -1,13 +1,48 @@
 use process::ProcessManager;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::signal;
 use tokio::time::sleep;
 use tracing::{error, info, warn};
+
+pub struct WatchdogConfig {
+    pub restart_delay: Duration,
+    pub max_restarts_per_window: usize,
+    pub window_duration: Duration,
+}
+
+impl Default for WatchdogConfig {
+    fn default() -> Self {
+        Self {
+            restart_delay: Duration::from_secs(3),
+            max_restarts_per_window: 5,
+            window_duration: Duration::from_secs(60),
+        }
+    }
+}
+
+pub struct WatchdogState {
+    pub uptime: Instant,
+    pub last_crash_reason: Option<i32>,
+    pub restart_timestamps: Vec<Instant>,
+}
+
+impl Default for WatchdogState {
+    fn default() -> Self {
+        Self {
+            uptime: Instant::now(),
+            last_crash_reason: None,
+            restart_timestamps: Vec::new(),
+        }
+    }
+}
 
 pub struct Watchdog;
 
 impl Watchdog {
     pub async fn run(binary_path: String, args: Vec<String>) {
+        let config = WatchdogConfig::default();
+        let mut state = WatchdogState::default();
+
         loop {
             info!("Watchdog: Starting miner...");
             let child_result = ProcessManager::spawn(&binary_path, &args).await;
@@ -19,13 +54,30 @@ impl Watchdog {
                             match status {
                                 Ok(exit_status) => {
                                     warn!("Miner process exited with status: {}", exit_status);
+                                    state.last_crash_reason = exit_status.code();
                                 }
                                 Err(e) => {
                                     error!("Failed to wait on miner process: {}", e);
+                                    state.last_crash_reason = None;
                                 }
                             }
-                            info!("Watchdog: Restarting miner in 3 seconds...");
-                            sleep(Duration::from_secs(3)).await;
+
+                            info!("Watchdog: Uptime: {} seconds", state.uptime.elapsed().as_secs());
+                            if let Some(code) = state.last_crash_reason {
+                                info!("Watchdog: Last crash reason (exit code): {}", code);
+                            }
+
+                            let now = Instant::now();
+                            state.restart_timestamps.retain(|&t| now.duration_since(t) < config.window_duration);
+
+                            if state.restart_timestamps.len() >= config.max_restarts_per_window {
+                                error!("Watchdog: Restart limit reached ({} restarts in the last {} seconds). Giving up.", config.max_restarts_per_window, config.window_duration.as_secs());
+                                break;
+                            }
+
+                            state.restart_timestamps.push(now);
+                            info!("Watchdog: Restarting miner in {} seconds...", config.restart_delay.as_secs());
+                            sleep(config.restart_delay).await;
                         }
                         _ = signal::ctrl_c() => {
                             info!("Watchdog: Received Ctrl+C. Shutting down...");
@@ -38,11 +90,48 @@ impl Watchdog {
                 }
                 Err(e) => {
                     error!("Watchdog: Failed to start miner: {}", e);
-                    info!("Watchdog: Retrying in 5 seconds...");
-                    sleep(Duration::from_secs(5)).await;
+
+                    let now = Instant::now();
+                    state.restart_timestamps.retain(|&t| now.duration_since(t) < config.window_duration);
+                    if state.restart_timestamps.len() >= config.max_restarts_per_window {
+                        error!("Watchdog: Start limit reached. Giving up.");
+                        break;
+                    }
+                    state.restart_timestamps.push(now);
+
+                    info!("Watchdog: Retrying in {} seconds...", config.restart_delay.as_secs());
+                    sleep(config.restart_delay).await;
                 }
             }
         }
         info!("Watchdog: Exited gracefully.");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_watchdog_restart_limit() {
+        let config = WatchdogConfig {
+            restart_delay: Duration::from_millis(10),
+            max_restarts_per_window: 3,
+            window_duration: Duration::from_secs(10),
+        };
+        let mut state = WatchdogState::default();
+
+        let now = Instant::now();
+
+        // Simulate 3 rapid crashes
+        for _ in 0..3 {
+            state.restart_timestamps.retain(|&t| now.duration_since(t) < config.window_duration);
+            assert!(state.restart_timestamps.len() < config.max_restarts_per_window);
+            state.restart_timestamps.push(Instant::now());
+        }
+
+        // The 4th crash should trigger the limit
+        state.restart_timestamps.retain(|&t| now.duration_since(t) < config.window_duration);
+        assert_eq!(state.restart_timestamps.len(), config.max_restarts_per_window);
     }
 }
