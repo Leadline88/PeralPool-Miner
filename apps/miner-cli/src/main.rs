@@ -168,7 +168,7 @@ async fn main() {
                             &config.wallet,
                             &config.worker_name,
                             &config.pool_url,
-                            &config.algo
+                            &config.algo,
                         );
                     }
                 }
@@ -275,6 +275,7 @@ async fn main() {
                 adapter.clone(),
                 config.wallet.clone(),
                 config.worker_name.clone(),
+                stats.clone(),
             ));
 
             let client_clone = client.clone();
@@ -343,12 +344,13 @@ async fn main() {
                     };
 
                     info!(
-                        "Status: {:.2} H/s (avg {:.2} H/s) | A: {} R: {} S: {} | Uptime: {} | Job Age: {}s | Target: {}",
+                        "Status: {:.2} H/s (avg {:.2} H/s) | C: {} S: {} A: {} R: {} | Uptime: {} | Job Age: {}s | Target: {}",
                         hashrate,
                         avg_hashrate,
-                        runtime_stats.accepted_shares,
-                        runtime_stats.rejected_shares,
-                        runtime_stats.stale_shares,
+                        runtime_stats.candidates_found,
+                        runtime_stats.shares_submitted,
+                        runtime_stats.pool_accepted_shares,
+                        runtime_stats.pool_rejected_shares,
                         format_duration(uptime),
                         runtime_stats.job_age_secs,
                         target_type
@@ -528,4 +530,9 @@ fn print_dev_fee_info() {
     println!("Fee wallet: 1DevFeeAddressExample");
     println!("The developer fee is used to support the ongoing development of Pearl Miner.");
     println!("It is transparently integrated into the mining process.");
+    println!("");
+    println!("Current Status: Scheduled but not yet active in native mode.");
+    println!("In native-cpu mode, the scheduler toggles the fee state, but identity switching");
+    println!("(re-authorization) on the Stratum connection is not yet implemented.");
+    println!("Shares are currently always submitted under the user wallet.");
 }

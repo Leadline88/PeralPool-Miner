@@ -76,7 +76,7 @@ impl CpuBackend {
                     "USER"
                 };
                 info!(
-                    "Worker {}: Found share for {} at nonce {}",
+                    "Worker {}: Found candidate for {} at nonce {}",
                     ctx.id, target_type, nonce
                 );
 
@@ -90,7 +90,7 @@ impl CpuBackend {
                     tracing::error!("Failed to send share candidate: {}", e);
                 }
 
-                ctx.stats.inc_accepted_sync();
+                ctx.stats.inc_candidates_found_sync();
             }
 
             local_hashes += 1;
@@ -219,6 +219,28 @@ mod tests {
         backend.set_job(dummy_job).await.unwrap();
 
         // Also stop it to be sure
+        backend.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_regression_not_placeholder_hashrate() {
+        let stats = Arc::new(StatsManager::new());
+        let is_dev_mining = Arc::new(AtomicBool::new(false));
+        let (share_tx, _share_rx) = mpsc::channel(1);
+        let backend = CpuBackend::new(1, stats, is_dev_mining, true, share_tx);
+
+        // Initially 0
+        assert_eq!(backend.get_hashrate().await, 0.0);
+
+        let dummy_job = r#"{"id":"1","blob":"00112233445566778899aabbccddeeff","target":1000000}"#;
+        backend.set_job(dummy_job).await.unwrap();
+
+        // Wait for some hashes to be computed
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+        let hashrate = backend.get_hashrate().await;
+        assert!(hashrate > 0.0, "Hashrate should be positive if workers are running");
+
         backend.stop().await.unwrap();
     }
 }

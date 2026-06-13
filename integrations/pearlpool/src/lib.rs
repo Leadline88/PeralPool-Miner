@@ -159,15 +159,56 @@ mod tests {
 
     #[test]
     fn test_build_lpminer_cmd() {
-        let (binary, args) = build_lpminer_cmd("stratum+tcp://pearlpool.cloud:5566", "1Wallet", "worker1");
+        let (binary, args) =
+            build_lpminer_cmd("stratum+tcp://pearlpool.cloud:5566", "1Wallet", "worker1");
         assert_eq!(binary, "./miners/lpminer/lpminer.exe");
-        assert_eq!(args, vec!["--pool", "stratum+tcp://pearlpool.cloud:5566", "--wallet", "1Wallet", "--worker", "worker1"]);
+        assert_eq!(
+            args,
+            vec![
+                "--pool",
+                "stratum+tcp://pearlpool.cloud:5566",
+                "--wallet",
+                "1Wallet",
+                "--worker",
+                "worker1"
+            ]
+        );
     }
 
     #[test]
     fn test_build_srbminer_cmd() {
-        let (binary, args) = build_srbminer_cmd("stratum+tcp://pearlpool.cloud:5566", "1Wallet", "worker1");
+        let (binary, args) =
+            build_srbminer_cmd("stratum+tcp://pearlpool.cloud:5566", "1Wallet", "worker1");
         assert_eq!(binary, "./miners/srbminer/SRBMiner-MULTI.exe");
-        assert_eq!(args, vec!["--algorithm", "pearl", "--pool", "stratum+tcp://pearlpool.cloud:5566", "--wallet", "1Wallet.worker1"]);
+        assert_eq!(
+            args,
+            vec![
+                "--algorithm",
+                "pearl",
+                "--pool",
+                "stratum+tcp://pearlpool.cloud:5566",
+                "--wallet",
+                "1Wallet.worker1"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_import_integrity() {
+        // This test ensures that PearlPoolAdapter can be instantiated and implements PoolAdapter
+        // which verifies the types from 'stratum' and 'shares' resolve correctly.
+        let adapter = PearlPoolAdapter;
+        assert_eq!(adapter.name(), "PearlPool");
+
+        let share = ShareCandidate {
+            job_id: "test".to_string(),
+            nonce: "123".to_string(),
+            result: "hash".to_string(),
+            worker: "worker".to_string(),
+            timestamp: chrono::Utc::now(),
+        };
+
+        let req = adapter.build_share_submit(&share);
+        assert_eq!(req.method, "mining.submit");
     }
 }

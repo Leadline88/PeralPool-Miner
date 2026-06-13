@@ -23,7 +23,17 @@ Pearl Miner supports multiple backends and provides a transparent mining experie
 - **CUDA/HIP/OpenCL/SYCL/Metal**: Planned 🛠️
 
 > [!WARNING]
-> Native CPU mode is a reference implementation and is not performance-competitive with GPU miners.
+> Native CPU mode is a reference implementation using a synthetic SHA256-based algorithm for proof-of-concept. It is not compatible with the real Pearl mainnet and is not performance-competitive with GPU miners.
+
+## Repository Integrity Status
+
+- **Build**: Passing ✅
+- **Tests**: Passing ✅
+- **Native CPU**: Available (Synthetic Reference) ✅
+- **Stratum**: Fully implemented client & loop ✅
+- **PearlPool live shares**: Not verified 🛠️
+- **Developer Fee**: Scheduled (Active identity switching: Incomplete) 🛠️
+- **GPU backends**: Planned 🛠️
 
 ## Transparent 1% Developer Fee
 
@@ -34,6 +44,9 @@ Pearl Miner includes a transparent 1.0% developer fee. This fee is used to fund 
 - **Honesty**: No hidden telemetry, no stealth mining, no misleading performance claims.
 
 Use the `--dev-fee-info` flag to view detailed fee information. See [docs/developer-fee.md](docs/developer-fee.md) for more details.
+
+> [!IMPORTANT]
+> In the current version, the developer fee is scheduled by the internal timer, but real-time identity switching on the Stratum connection is not yet implemented in native mode. Shares found during "developer mining" periods are currently submitted under the user's wallet.
 
 ## Benchmarking
 

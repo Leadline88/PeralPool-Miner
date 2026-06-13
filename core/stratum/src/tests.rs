@@ -6,6 +6,7 @@ mod stratum_tests {
     use crate::mock_server::MockStratumServer;
     use chrono::Utc;
     use shares::ShareCandidate;
+    use stats::StatsManager;
     use std::sync::Arc;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
@@ -90,12 +91,14 @@ mod stratum_tests {
         let cancel_token_clone = cancel_token.clone();
         tokio::spawn(async move { client_handle.run(cancel_token_clone).await });
 
+        let stats = Arc::new(StatsManager::new());
         let (share_tx, share_rx) = mpsc::channel(10);
         let miner = MinerLoop::new(
             client.clone(),
             adapter,
             "wallet".to_string(),
             "worker".to_string(),
+            stats.clone(),
         );
         let tracker = miner.get_tracker();
 
@@ -128,6 +131,10 @@ mod stratum_tests {
             let tracker_lock = tracker.lock().await;
             assert_eq!(tracker_lock.accepted_count, 1);
         }
+
+        let current_stats = stats.get_stats().await;
+        assert_eq!(current_stats.shares_submitted, 1);
+        assert_eq!(current_stats.pool_accepted_shares, 1);
 
         cancel_token.cancel();
         let _ = miner_handle.await;

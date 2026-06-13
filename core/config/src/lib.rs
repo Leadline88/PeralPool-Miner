@@ -17,7 +17,13 @@ pub struct MinerConfig {
 }
 
 impl MinerConfig {
-    pub fn expand_args(&self, wallet: &str, worker: &str, pool_url: &str, algo: &str) -> Vec<String> {
+    pub fn expand_args(
+        &self,
+        wallet: &str,
+        worker: &str,
+        pool_url: &str,
+        algo: &str,
+    ) -> Vec<String> {
         self.args
             .iter()
             .map(|arg| {
@@ -207,7 +213,10 @@ mod tests {
         let miners = config.miners.unwrap();
 
         assert_eq!(profiles.get("pearlpool").unwrap().miner, "lpminer");
-        assert_eq!(miners.get("lpminer").unwrap().binary_path, "./miners/lpminer/lpminer.exe");
+        assert_eq!(
+            miners.get("lpminer").unwrap().binary_path,
+            "./miners/lpminer/lpminer.exe"
+        );
     }
 
     #[test]
