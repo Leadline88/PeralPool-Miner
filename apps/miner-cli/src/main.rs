@@ -80,6 +80,14 @@ struct Args {
     #[arg(short, long, default_value = "config.toml")]
     config: PathBuf,
 
+    /// Validate configuration and exit
+    #[arg(long)]
+    validate_config: bool,
+
+    /// Print command for compatibility mode and exit
+    #[arg(long)]
+    print_command: bool,
+
     /// Allow experimental live Stratum mining (unverified)
     #[arg(long)]
     allow_experimental_live_stratum: bool,
@@ -224,6 +232,22 @@ async fn main() {
         exit(1);
     }
 
+    if args.validate_config {
+        info!("Configuration is valid.");
+        return;
+    }
+
+    if args.print_command {
+        if config.mode == MiningMode::Compatibility {
+            println!("External miner command:");
+            println!("{} {}", config.miner_binary_path, config.args.join(" "));
+            return;
+        } else {
+            error!("--print-command is only available in compatibility mode.");
+            exit(1);
+        }
+    }
+
     info!("Starting Pearl Miner...");
     info!("Mode: {:?}", config.mode);
     info!("Backend: {:?}", config.backend);
@@ -239,6 +263,12 @@ async fn main() {
         MiningMode::NativeCpu => {
             warn!("NOTICE: Running in native-cpu mode (SYNTHETIC / REFERENCE-ONLY)");
             warn!("This implementation is NOT performance competitive and NOT verified for Pearl mainnet.");
+
+            if !args.allow_experimental_live_stratum {
+                info!("Native CPU mode is offline synthetic/reference-only. Live PearlPool mining is not verified.");
+                info!("Developer-fee policy is defined, but active wallet switching is not implemented and no fee is collected in native mode.");
+            }
+
             if config.dry_run {
                 info!("Dry run enabled, exiting.");
                 return;
@@ -267,74 +297,99 @@ async fn main() {
                 share_tx,
             ));
 
-            let scheduler_clone = scheduler.clone();
-            let fee_state_updater = fee_state.clone();
-            let scheduler_handle = tokio::spawn(async move {
-                // Update local fee_state periodically from scheduler
-                let scheduler_for_updater = scheduler_clone.clone();
-                tokio::spawn(async move {
-                    loop {
-                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                        let mut state = fee_state_updater.write().await;
-                        *state = scheduler_for_updater.get_state();
-                    }
-                });
-                scheduler_clone.run().await;
-            });
+            let scheduler_handle = if args.allow_experimental_live_stratum {
+                let scheduler_clone = scheduler.clone();
+                let fee_state_updater = fee_state.clone();
+                Some(tokio::spawn(async move {
+                    // Update local fee_state periodically from scheduler
+                    let scheduler_for_updater = scheduler_clone.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                            let mut state = fee_state_updater.write().await;
+                            *state = scheduler_for_updater.get_state();
+                        }
+                    });
+                    scheduler_clone.run().await;
+                }))
+            } else {
+                None
+            };
 
             backend.start().await.expect("Failed to start backend");
 
-            // Stratum Client setup
             let cancel_token = CancellationToken::new();
-            let adapter = Arc::new(PearlPoolAdapter::new(args.allow_experimental_live_stratum));
-            let client = StratumClient::new(&config.pool_url, adapter.clone());
-            let miner_loop = Arc::new(MinerLoop::new(
-                client.clone(),
-                adapter.clone(),
-                config.wallet.clone(),
-                config.worker_name.clone(),
-                stats.clone(),
-            ));
 
-            let client_clone = client.clone();
-            let cancel_token_clone = cancel_token.clone();
-            tokio::spawn(async move {
-                client_clone.run(cancel_token_clone).await;
-            });
+            if args.allow_experimental_live_stratum {
+                // Stratum Client setup
+                let adapter = Arc::new(PearlPoolAdapter::new(args.allow_experimental_live_stratum));
+                let client = StratumClient::new(&config.pool_url, adapter.clone());
+                let miner_loop = Arc::new(MinerLoop::new(
+                    client.clone(),
+                    adapter.clone(),
+                    config.wallet.clone(),
+                    config.worker_name.clone(),
+                    stats.clone(),
+                ));
 
-            let mut job_rx = miner_loop.subscribe_jobs();
-            let backend_clone = backend.clone();
-            tokio::spawn(async move {
-                while let Some(job_value) = job_rx.recv().await {
-                    let job_str = job_value.to_string();
-                    if let Err(e) = backend_clone.set_job(&job_str).await {
-                        error!("Failed to set job in backend: {}", e);
+                let client_clone = client.clone();
+                let cancel_token_clone = cancel_token.clone();
+                tokio::spawn(async move {
+                    client_clone.run(cancel_token_clone).await;
+                });
+
+                let mut job_rx = miner_loop.subscribe_jobs();
+                let backend_clone = backend.clone();
+                tokio::spawn(async move {
+                    while let Some(job_value) = job_rx.recv().await {
+                        let job_str = job_value.to_string();
+                        if let Err(e) = backend_clone.set_job(&job_str).await {
+                            error!("Failed to set job in backend: {}", e);
+                        }
                     }
-                }
-            });
+                });
 
-            let (miner_share_tx, miner_share_rx) = mpsc::channel(100);
-            let miner_loop_clone = miner_loop.clone();
-            let cancel_token_miner = cancel_token.clone();
-            tokio::spawn(async move {
-                miner_loop_clone
-                    .run(miner_share_rx, cancel_token_miner)
-                    .await;
-            });
+                let (miner_share_tx, miner_share_rx) = mpsc::channel(100);
+                let miner_loop_clone = miner_loop.clone();
+                let cancel_token_miner = cancel_token.clone();
+                tokio::spawn(async move {
+                    miner_loop_clone
+                        .run(miner_share_rx, cancel_token_miner)
+                        .await;
+                });
 
-            let worker_name = config.worker_name.clone();
-            tokio::spawn(async move {
-                while let Some(candidate) = share_rx.recv().await {
-                    let share = shares::ShareCandidate {
-                        worker: worker_name.clone(),
-                        job_id: candidate.job_id,
-                        nonce: candidate.nonce.to_string(),
-                        timestamp: Utc::now(),
-                        result: String::new(),
-                    };
-                    let _ = miner_share_tx.send(share).await;
-                }
-            });
+                let worker_name = config.worker_name.clone();
+                tokio::spawn(async move {
+                    while let Some(candidate) = share_rx.recv().await {
+                        let share = shares::ShareCandidate {
+                            worker: worker_name.clone(),
+                            job_id: candidate.job_id,
+                            nonce: candidate.nonce.to_string(),
+                            timestamp: Utc::now(),
+                            result: String::new(),
+                        };
+                        let _ = miner_share_tx.send(share).await;
+                    }
+                });
+            } else {
+                // Offline synthetic job
+                let dummy_job = serde_json::json!({
+                    "id": "offline-synthetic",
+                    "blob": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+                    "target": 1000000
+                });
+                backend
+                    .set_job(&dummy_job.to_string())
+                    .await
+                    .expect("Failed to set synthetic job");
+
+                // Drain shares to avoid blocking backend
+                tokio::spawn(async move {
+                    while share_rx.recv().await.is_some() {
+                        // In offline mode, we just drop shares or could count them locally
+                    }
+                });
+            }
 
             // Status display loop
             let stats_clone = stats.clone();
@@ -386,13 +441,20 @@ async fn main() {
                 }
             });
 
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    info!("Received Ctrl+C, shutting down...");
+            if let Some(handle) = scheduler_handle {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {
+                        info!("Received Ctrl+C, shutting down...");
+                    }
+                    _ = handle => {
+                        error!("Scheduler task finished unexpectedly");
+                    }
                 }
-                _ = scheduler_handle => {
-                    error!("Scheduler task finished unexpectedly");
-                }
+            } else {
+                tokio::signal::ctrl_c()
+                    .await
+                    .expect("Failed to listen for Ctrl+C");
+                info!("Received Ctrl+C, shutting down...");
             }
             cancel_token.cancel();
             backend.stop().await.expect("Failed to stop backend");

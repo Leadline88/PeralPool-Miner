@@ -169,6 +169,8 @@ mod tests {
         let real_job_json = r#"{"method":"mining.notify","params":[]}"#;
         let result = algo.parse_job(real_job_json);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Real Pearl algorithm not implemented"));
+        assert!(result
+            .unwrap_err()
+            .contains("Real Pearl algorithm not implemented"));
     }
 }
