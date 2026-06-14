@@ -30,7 +30,8 @@ pub struct ActiveMiningIdentity {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RuntimeStats {
-    pub hashrate: f64,
+    pub current_hashrate_hps: f64,
+    pub average_hashrate_hps: f64,
     pub candidates_found: u64,
     pub shares_submitted: u64,
     pub pool_accepted_shares: u64,
@@ -48,7 +49,8 @@ pub struct RuntimeStats {
 impl Default for RuntimeStats {
     fn default() -> Self {
         Self {
-            hashrate: 0.0,
+            current_hashrate_hps: 0.0,
+            average_hashrate_hps: 0.0,
             candidates_found: 0,
             shares_submitted: 0,
             pool_accepted_shares: 0,
@@ -74,7 +76,9 @@ pub struct StatsManager {
     invalid_shares: AtomicU64,
     unsupported_submit: AtomicU64,
 
-    hashrate: Arc<RwLock<f64>>,
+    current_hashrate: Arc<RwLock<f64>>,
+    total_hash_samples: AtomicU64,
+    total_hash_sum: Arc<RwLock<f64>>,
     active_identity: Arc<RwLock<ActiveMiningIdentity>>,
     dev_fee_state: Arc<RwLock<DevFeeState>>,
     start_time: Instant,
@@ -97,7 +101,9 @@ impl StatsManager {
             stale_shares: AtomicU64::new(0),
             invalid_shares: AtomicU64::new(0),
             unsupported_submit: AtomicU64::new(0),
-            hashrate: Arc::new(RwLock::new(0.0)),
+            current_hashrate: Arc::new(RwLock::new(0.0)),
+            total_hash_samples: AtomicU64::new(0),
+            total_hash_sum: Arc::new(RwLock::new(0.0)),
             active_identity: Arc::new(RwLock::new(ActiveMiningIdentity {
                 wallet: String::new(),
                 worker: String::new(),
@@ -110,8 +116,12 @@ impl StatsManager {
     }
 
     pub async fn update_hashrate(&self, hashrate: f64) {
-        let mut h = self.hashrate.write().await;
+        let mut h = self.current_hashrate.write().await;
         *h = hashrate;
+
+        let mut sum = self.total_hash_sum.write().await;
+        *sum += hashrate;
+        self.total_hash_samples.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn inc_candidates_found(&self) {
@@ -171,8 +181,17 @@ impl StatsManager {
             masked = identity.wallet.clone();
         }
 
+        let current_h = *self.current_hashrate.read().await;
+        let samples = self.total_hash_samples.load(Ordering::Relaxed);
+        let avg_h = if samples > 0 {
+            *self.total_hash_sum.read().await / samples as f64
+        } else {
+            0.0
+        };
+
         RuntimeStats {
-            hashrate: *self.hashrate.read().await,
+            current_hashrate_hps: current_h,
+            average_hashrate_hps: avg_h,
             candidates_found: self.candidates_found.load(Ordering::Relaxed),
             shares_submitted: self.shares_submitted.load(Ordering::Relaxed),
             pool_accepted_shares: self.pool_accepted_shares.load(Ordering::Relaxed),
@@ -230,7 +249,8 @@ mod tests {
         assert_eq!(stats.pool_accepted_shares, 1);
         assert_eq!(stats.pool_rejected_shares, 1);
         assert_eq!(stats.stale_shares, 1);
-        assert_eq!(stats.hashrate, 1234.5);
+        assert_eq!(stats.current_hashrate_hps, 1234.5);
+        assert_eq!(stats.average_hashrate_hps, 1234.5);
         assert_eq!(stats.active_wallet_masked, "1A1zP1...vfNa");
         assert_eq!(stats.active_target_type, MiningTargetType::User);
     }

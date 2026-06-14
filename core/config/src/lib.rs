@@ -117,17 +117,15 @@ impl Config {
             MiningMode::Compatibility => {
                 if self.miner_binary_path.is_empty() {
                     return Err(ConfigError::Validation(
-                        "Miner binary path cannot be empty in compatibility mode".to_string(),
+                        "Miner binary path cannot be empty in compatibility mode. Use --miner-binary or set it in config.".to_string(),
                     ));
                 }
-                // Compatibility mode requires only miner binary path and arguments according to requirements.
-                // However, we still want to ensure arguments are not empty if we expect them.
             }
             MiningMode::NativeCpu => {
-                // native-cpu offline mode requires only what it actually uses (none of wallet/pool strictly required for synthetic)
+                // native-cpu offline mode requires nothing mandatory as it uses synthetic defaults
             }
             MiningMode::NativeGpu => {
-                // Will be caught by NotImplemented in CLI
+                // Validation for future GPU parameters can go here, but CLI currently returns NotImplemented
             }
         }
         Ok(())
@@ -137,17 +135,17 @@ impl Config {
     pub fn validate_live(&self) -> Result<(), ConfigError> {
         if self.wallet.is_empty() {
             return Err(ConfigError::Validation(
-                "Wallet cannot be empty for live mining".to_string(),
+                "Wallet cannot be empty for experimental live stratum mining. Use --wallet or set it in config.".to_string(),
             ));
         }
         if self.worker_name.is_empty() {
             return Err(ConfigError::Validation(
-                "Worker name cannot be empty for live mining".to_string(),
+                "Worker name cannot be empty for experimental live stratum mining. Use --worker or set it in config.".to_string(),
             ));
         }
         if self.pool_url.is_empty() {
             return Err(ConfigError::Validation(
-                "Pool URL cannot be empty for live mining".to_string(),
+                "Pool URL cannot be empty for experimental live stratum mining. Use --pool or set it in config.".to_string(),
             ));
         }
         self.validate()
