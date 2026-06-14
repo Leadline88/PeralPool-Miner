@@ -369,7 +369,7 @@ async fn main() {
                         config_mode, config_backend, is_live, runtime_stats.active_target_type, runtime_stats.active_wallet_masked, dev_fee_state
                     );
                     info!(
-                        "Status: Uptime: {} | Job Age: {}s | C: {} | S: {} | A: {} | R: {} | Stale: {} | Invalid: {} | {:.2} H/s (avg {:.2} H/s)",
+                        "Status: Uptime: {} | Job Age: {}s | C: {} | S: {} | A: {} | R: {} | Stale: {} | Invalid: {} | U: {} | {:.2} H/s (avg {:.2} H/s)",
                         format_duration(uptime),
                         runtime_stats.job_age_secs,
                         runtime_stats.candidates_found,
@@ -378,6 +378,7 @@ async fn main() {
                         runtime_stats.pool_rejected_shares,
                         runtime_stats.stale_shares,
                         runtime_stats.invalid_shares,
+                        runtime_stats.unsupported_submit,
                         hashrate,
                         avg_hashrate
                     );

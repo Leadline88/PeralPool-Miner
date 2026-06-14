@@ -60,7 +60,10 @@ mod stratum_tests {
                 None
             }
         }
-        fn build_share_submit(&self, share: &ShareCandidate) -> Result<crate::protocol::JsonRpcRequest, crate::adapter::PoolAdapterError> {
+        fn build_share_submit(
+            &self,
+            share: &ShareCandidate,
+        ) -> Result<crate::protocol::JsonRpcRequest, crate::adapter::PoolAdapterError> {
             Ok(crate::protocol::JsonRpcRequest {
                 id: None,
                 method: "mining.submit".to_string(),
@@ -73,6 +76,97 @@ mod stratum_tests {
         ) -> Result<bool, String> {
             Ok(true)
         }
+    }
+
+    #[tokio::test]
+    async fn test_unsupported_submit_handling() {
+        struct UnsupportedAdapter;
+        impl PoolAdapter for UnsupportedAdapter {
+            fn name(&self) -> &str {
+                "Unsupported"
+            }
+            fn build_subscribe_request(&self) -> crate::protocol::JsonRpcRequest {
+                crate::protocol::JsonRpcRequest {
+                    id: None,
+                    method: "sub".into(),
+                    params: serde_json::json!([]),
+                }
+            }
+            fn parse_subscribe_response(
+                &self,
+                _res: &crate::protocol::JsonRpcResponse,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+            fn build_login_request(&self, _w: &str, _wr: &str) -> crate::protocol::JsonRpcRequest {
+                crate::protocol::JsonRpcRequest {
+                    id: None,
+                    method: "log".into(),
+                    params: serde_json::json!([]),
+                }
+            }
+            fn parse_login_response(
+                &self,
+                _res: &crate::protocol::JsonRpcResponse,
+            ) -> Result<bool, String> {
+                Ok(true)
+            }
+            fn parse_job(
+                &self,
+                _req: &crate::protocol::JsonRpcRequest,
+            ) -> Option<serde_json::Value> {
+                None
+            }
+            fn parse_difficulty(&self, _req: &crate::protocol::JsonRpcRequest) -> Option<f64> {
+                None
+            }
+            fn build_share_submit(
+                &self,
+                _share: &ShareCandidate,
+            ) -> Result<crate::protocol::JsonRpcRequest, crate::adapter::PoolAdapterError>
+            {
+                Err(crate::adapter::PoolAdapterError::UnsupportedRealPearlShareSubmitFormat)
+            }
+            fn parse_share_response(
+                &self,
+                _res: &crate::protocol::JsonRpcResponse,
+            ) -> Result<bool, String> {
+                Ok(true)
+            }
+        }
+
+        let stats = Arc::new(StatsManager::new());
+        let adapter = Arc::new(UnsupportedAdapter);
+        let client = StratumClient::new("127.0.0.1:1", adapter.clone()); // Won't connect, but we only test share submission logic
+        let miner = MinerLoop::new(client, adapter, "w".into(), "wr".into(), stats.clone());
+
+        let (share_tx, share_rx) = mpsc::channel(1);
+        let cancel_token = CancellationToken::new();
+        let cancel_token_clone = cancel_token.clone();
+
+        let miner_handle = tokio::spawn(async move {
+            miner.run(share_rx, cancel_token_clone).await;
+        });
+
+        let share = ShareCandidate {
+            job_id: "j".into(),
+            nonce: "n".into(),
+            result: "r".into(),
+            worker: "wr".into(),
+            timestamp: Utc::now(),
+        };
+        share_tx.send(share).await.unwrap();
+
+        // Give it a moment to process the share
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let current_stats = stats.get_stats().await;
+        assert_eq!(current_stats.unsupported_submit, 1);
+        assert_eq!(current_stats.shares_submitted, 0);
+        assert_eq!(current_stats.pool_accepted_shares, 0);
+
+        cancel_token.cancel();
+        let _ = miner_handle.await;
     }
 
     #[tokio::test]

@@ -26,6 +26,14 @@ Pearl Miner supports multiple backends and provides a transparent mining experie
 > [!WARNING]
 > Native CPU mode is synthetic/reference-only. The real Pearl mainnet algorithm is not implemented/verified yet. Live PearlPool job parsing is experimental/raw only, and live PearlPool share submission is unsupported until the format is verified. GPU backends are planned only.
 
+## Native Mode Truthfulness
+
+- **Native CPU**: Synthetic/reference-only implementation.
+- **Pearl Algorithm**: Real mainnet algorithm is **NOT** implemented.
+- **Live PearlPool**: Jobs are unverified/experimental.
+- **Share Submission**: Live PearlPool share submission is **UNSUPPORTED** until verified.
+- **Developer Fee**: Scheduled but **NOT** collected in native mode (identity switching is pending).
+
 ## Repository Integrity Status
 
 - **Build**: Passing ✅

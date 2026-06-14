@@ -4,6 +4,12 @@ use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::{json, Value};
 use shares::ShareCandidate;
 
+/// A mock pool adapter for testing purposes.
+///
+/// **Important:** This adapter builds fake `mining.submit` payloads.
+/// These payloads are for internal testing ONLY and do not represent the
+/// real PearlPool Stratum protocol format. Do not use this as a reference
+/// for the real PearlPool share submission format.
 pub struct MockPoolAdapter;
 
 impl PoolAdapter for MockPoolAdapter {

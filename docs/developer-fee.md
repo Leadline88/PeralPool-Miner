@@ -26,7 +26,7 @@ The current developer fee wallet is: `1DevFeeAddressExample`
 ## Current Status (Native Mode)
 
 > [!IMPORTANT]
-> In the current native CPU mode, real-time identity switching (re-authorization) on the Stratum connection is not yet implemented. While the scheduler toggles the fee state, `ScheduledInactive` does not mine to the developer wallet. Shares found during "developer mining" periods are currently submitted under the user's wallet. The status will show `ScheduledInactive` during these periods. `ActiveDeveloperMining` is not possible in native mode yet, so the 1% fee is transparent but not actually collected in native mode until identity switching is implemented.
+> In the current native CPU mode, real-time identity switching (re-authorization) on the Stratum connection is not yet implemented. While the scheduler toggles the fee state, `ScheduledInactive` does not mine to the developer wallet and **does not change the active mining identity**. Shares found during "developer mining" periods are currently submitted under the user's wallet. The status will show `ScheduledInactive` during these periods. `ActiveDeveloperMining` is not possible in native mode yet, so the 1% fee is scheduled but **not actually collected** in native mode until identity switching is implemented.
 
 ## Promise
 

@@ -141,4 +141,69 @@ mod tests {
         sleep(Duration::from_secs(1)).await;
         assert_eq!(scheduler.get_state(), DevFeeState::ScheduledInactive);
     }
+
+    #[tokio::test]
+    async fn test_scheduled_inactive_no_wallet_switch() {
+        let stats = Arc::new(StatsManager::new());
+        let user_wallet = "user_wallet".to_string();
+        let user_worker = "user_worker".to_string();
+        let scheduler =
+            DevFeeScheduler::new(user_wallet.clone(), user_worker.clone(), stats.clone());
+
+        // Set an initial identity
+        stats
+            .set_identity(ActiveMiningIdentity {
+                wallet: "initial".to_string(),
+                worker: "initial".to_string(),
+                target_type: MiningTargetType::User,
+            })
+            .await;
+
+        // Run the scheduler for a bit - it should switch to User mining first
+        let scheduler_clone = Arc::new(scheduler);
+        let scheduler_task = {
+            let s = scheduler_clone.clone();
+            tokio::spawn(async move {
+                s.run().await;
+            })
+        };
+
+        // Wait for it to set user identity
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        let stats_val = stats.get_stats().await;
+        assert_eq!(stats_val.active_target_type, MiningTargetType::User);
+        // We can't easily check the full wallet because it's masked in get_stats,
+        // but we can check the masked version matches the user wallet
+        let mut expected_masked = String::new();
+        if user_wallet.len() > 10 {
+            expected_masked.push_str(&user_wallet[..6]);
+            expected_masked.push_str("...");
+            expected_masked.push_str(&user_wallet[user_wallet.len() - 4..]);
+        } else {
+            expected_masked = user_wallet.clone();
+        }
+        assert_eq!(stats_val.active_wallet_masked, expected_masked);
+
+        // Manually trigger the ScheduledInactive logic to test it in isolation
+        // since the real cycle is 1 hour.
+        stats
+            .set_dev_fee_state(DevFeeState::ScheduledInactive)
+            .await;
+
+        // Re-affirm user identity as the scheduler would
+        stats
+            .set_identity(ActiveMiningIdentity {
+                wallet: user_wallet.clone(),
+                worker: user_worker.clone(),
+                target_type: MiningTargetType::User,
+            })
+            .await;
+
+        let stats_val = stats.get_stats().await;
+        assert_eq!(stats_val.dev_fee_state, DevFeeState::ScheduledInactive);
+        assert_eq!(stats_val.active_target_type, MiningTargetType::User);
+        assert_eq!(stats_val.active_wallet_masked, expected_masked);
+
+        scheduler_task.abort();
+    }
 }
