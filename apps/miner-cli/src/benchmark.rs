@@ -105,16 +105,14 @@ pub async fn run(args: &Args) {
 
     println!("{}", serde_json::to_string_pretty(&report).unwrap());
 
-    // Write report to file
-    let report_path = args
-        .benchmark_output
-        .as_deref()
-        .unwrap_or("benchmark_report.json");
-    if let Ok(content) = serde_json::to_string_pretty(&report) {
-        if let Err(e) = std::fs::write(report_path, content) {
-            tracing::error!("Failed to save benchmark report to {}: {}", report_path, e);
-        } else {
-            info!("Benchmark report saved to {}", report_path);
+    // Write report to file if requested
+    if let Some(report_path) = &args.benchmark_output {
+        if let Ok(content) = serde_json::to_string_pretty(&report) {
+            if let Err(e) = std::fs::write(report_path, content) {
+                tracing::error!("Failed to save benchmark report to {}: {}", report_path, e);
+            } else {
+                info!("Benchmark report saved to {}", report_path);
+            }
         }
     }
 

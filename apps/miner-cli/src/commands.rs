@@ -5,6 +5,29 @@ use std::process::exit;
 use tracing::{error, info};
 
 pub async fn dispatch(config: Config, args: Args) {
+    if args.dev_fee_info {
+        crate::dev_fee_info::print();
+        return;
+    }
+
+    if let Some(path) = &args.verify_pearl_fixture {
+        verify_fixture(path).await;
+        return;
+    }
+
+    // Validate merged config
+    let validation_res = if args.allow_experimental_live_stratum {
+        config.validate_live()
+    } else {
+        config.validate()
+    };
+
+    if let Err(e) = validation_res {
+        error!("Configuration validation failed: {}", e);
+        error!("Please provide missing values via config file or CLI arguments.");
+        exit(1);
+    }
+
     if args.validate_config {
         info!("Configuration is valid.");
         return;
