@@ -110,6 +110,43 @@ fn test_cli_dry_run_compatibility() {
 }
 
 #[test]
+fn test_cli_dry_run_native_cpu() {
+    let mut cmd = Command::cargo_bin("miner-cli").unwrap();
+    cmd.arg("--mode").arg("native-cpu").arg("--dry-run");
+
+    let output = cmd.output().expect("failed to execute process");
+    assert!(output.status.success());
+    let combined_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined_output.contains("Dry run enabled, exiting."));
+}
+
+#[test]
+fn test_cli_dry_run_experimental_stratum() {
+    let mut cmd = Command::cargo_bin("miner-cli").unwrap();
+    cmd.arg("--mode")
+        .arg("native-cpu")
+        .arg("--allow-experimental-live-stratum")
+        .arg("--wallet")
+        .arg("1A1z")
+        .arg("--pool")
+        .arg("stratum+tcp://localhost:5566")
+        .arg("--dry-run");
+
+    let output = cmd.output().expect("failed to execute process");
+    assert!(output.status.success());
+    let combined_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined_output.contains("Dry run enabled. Not connecting to pool."));
+}
+
+#[test]
 fn test_cli_native_gpu_not_implemented() {
     let mut cmd = Command::cargo_bin("miner-cli").unwrap();
     cmd.arg("--mode").arg("native-gpu");
