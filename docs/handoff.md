@@ -33,16 +33,19 @@ The project is structured as a Rust workspace with the following key crates:
 ## How to Run
 
 ### Compatibility Mode (Recommended for Live Mining)
+
 ```bash
 cargo run -- --mode compatibility --miner-binary path/to/miner --pool stratum+tcp://... --wallet <address>
 ```
 
 ### Native CPU Synthetic Mode (Offline)
+
 ```bash
 cargo run -- --mode native-cpu
 ```
 
 ### Native CPU Experimental Mode (Live Stratum)
+
 ```bash
 cargo run -- --mode native-cpu --allow-experimental-live-stratum --pool stratum+tcp://... --wallet <address>
 ```

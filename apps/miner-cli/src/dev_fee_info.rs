@@ -1,7 +1,7 @@
 pub fn print() {
     println!("Pearl Miner Developer Fee Information:");
     println!("Default fee: 1.0%");
-    println!("Fee wallet: 1DevFeeAddressExample");
+    println!("Fee wallet: 1DevFeeAddressExample_PLACEHOLDER (Placeholder only)");
     println!("The developer fee is used to support the ongoing development of Pearl Miner.");
     println!("It is transparently integrated into the mining process.");
     println!();
