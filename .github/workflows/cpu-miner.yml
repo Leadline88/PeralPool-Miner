@@ -1,4 +1,4 @@
-name: CPU Miner CI
+name: CPU Miner CI (Foundation Polish)
 
 on:
   push:

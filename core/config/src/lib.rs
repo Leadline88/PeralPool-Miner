@@ -113,27 +113,44 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
+        match self.mode {
+            MiningMode::Compatibility => {
+                if self.miner_binary_path.is_empty() {
+                    return Err(ConfigError::Validation(
+                        "Miner binary path cannot be empty in compatibility mode".to_string(),
+                    ));
+                }
+                // Compatibility mode requires only miner binary path and arguments according to requirements.
+                // However, we still want to ensure arguments are not empty if we expect them.
+            }
+            MiningMode::NativeCpu => {
+                // native-cpu offline mode requires only what it actually uses (none of wallet/pool strictly required for synthetic)
+            }
+            MiningMode::NativeGpu => {
+                // Will be caught by NotImplemented in CLI
+            }
+        }
+        Ok(())
+    }
+
+    /// Full validation including network requirements (used for experimental live Stratum)
+    pub fn validate_live(&self) -> Result<(), ConfigError> {
         if self.wallet.is_empty() {
             return Err(ConfigError::Validation(
-                "Wallet cannot be empty".to_string(),
+                "Wallet cannot be empty for live mining".to_string(),
             ));
         }
         if self.worker_name.is_empty() {
             return Err(ConfigError::Validation(
-                "Worker name cannot be empty".to_string(),
+                "Worker name cannot be empty for live mining".to_string(),
             ));
         }
         if self.pool_url.is_empty() {
             return Err(ConfigError::Validation(
-                "Pool URL cannot be empty".to_string(),
+                "Pool URL cannot be empty for live mining".to_string(),
             ));
         }
-        if self.mode == MiningMode::Compatibility && self.miner_binary_path.is_empty() {
-            return Err(ConfigError::Validation(
-                "Miner binary path cannot be empty in compatibility mode".to_string(),
-            ));
-        }
-        Ok(())
+        self.validate()
     }
 }
 
@@ -220,16 +237,38 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_config() {
+    fn test_valid_config_native_cpu_offline() {
         let toml_str = r#"
-            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+            wallet = ""
             worker_name = "worker1"
-            pool_url = "stratum+tcp://pearlpool.cloud:5566"
+            pool_url = ""
             mode = "native-cpu"
             backend = "cpu"
             algo = "pearl"
+            miner_binary_path = ""
+            args = []
+            threads = 0
+            deterministic = false
+            benchmark = false
+            dry_run = false
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.validate().is_ok());
+        assert!(config.validate_live().is_err());
+    }
+
+    #[test]
+    fn test_valid_config_compatibility() {
+        let toml_str = r#"
+            wallet = ""
+            worker_name = ""
+            pool_url = ""
+            mode = "compatibility"
+            backend = "cpu"
+            algo = "pearl"
             miner_binary_path = "/usr/bin/miner"
-            args = ["--algo", "pearl", "--pool", "stratum+tcp://pearlpool.cloud:5566"]
+            args = ["--arg1"]
             threads = 0
             deterministic = false
             benchmark = false
@@ -241,36 +280,15 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_config_empty_wallet() {
+    fn test_invalid_config_compatibility_no_binary() {
         let toml_str = r#"
             wallet = ""
-            worker_name = "worker1"
-            pool_url = "stratum+tcp://pearlpool.cloud:5566"
-            mode = "native-cpu"
-            backend = "cpu"
-            algo = "pearl"
-            miner_binary_path = "/usr/bin/miner"
-            args = []
-            threads = 0
-            deterministic = false
-            benchmark = false
-            dry_run = false
-        "#;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert!(config.validate().is_err());
-    }
-
-    #[test]
-    fn test_invalid_config_empty_worker_name() {
-        let toml_str = r#"
-            wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
             worker_name = ""
-            pool_url = "stratum+tcp://pearlpool.cloud:5566"
-            mode = "native-cpu"
+            pool_url = ""
+            mode = "compatibility"
             backend = "cpu"
             algo = "pearl"
-            miner_binary_path = "/usr/bin/miner"
+            miner_binary_path = ""
             args = []
             threads = 0
             deterministic = false
@@ -283,15 +301,15 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_config_empty_pool_url() {
+    fn test_valid_live_config() {
         let toml_str = r#"
             wallet = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
             worker_name = "worker1"
-            pool_url = ""
+            pool_url = "stratum+tcp://pearlpool.cloud:5566"
             mode = "native-cpu"
             backend = "cpu"
             algo = "pearl"
-            miner_binary_path = "/usr/bin/miner"
+            miner_binary_path = ""
             args = []
             threads = 0
             deterministic = false
@@ -300,6 +318,6 @@ mod tests {
         "#;
 
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert!(config.validate().is_err());
+        assert!(config.validate_live().is_ok());
     }
 }

@@ -1,24 +1,21 @@
 # Developer Fee Policy
 
-Pearl Miner defines a transparent 1.0% developer fee policy.
+Pearl Miner includes a transparent 1.0% developer fee to support ongoing development.
 
-## Policy Details
+## Current Status: Policy Only
 
-- **Default Fee**: 1.0%
-- **Status**: **Defined but Not Actively Collected in Native Mode.**
-- **Wallet**: `1DevFeeAddressExample`
+The infrastructure for the developer fee is implemented at the foundation level, but **active collection is not implemented** in the native mining mode.
 
-## Mechanism (Future)
+- **Policy**: 1.0% (36 seconds out of every 3600 seconds).
+- **Implementation**: The `DevFeeScheduler` tracks the cycle and updates the `DevFeeState`.
+- **Native Mode**: In native-cpu mode, the scheduler is either disabled (offline mode) or runs in a "ScheduledInactive" state (experimental mode).
+- **No Identity Switching**: The current implementation does not perform Stratum re-authorization. All shares found during the "developer window" are still submitted under the user's wallet.
 
-The intended mechanism is periodic identity switching (re-authorization) on the Stratum connection.
+## Future Implementation
 
-- **User Period**: 3564 seconds (99.0%)
-- **Developer Period**: 36 seconds (1.0%)
+Future developers should implement the following in `core/stratum/src/miner_loop.rs`:
 
-## Current Foundation Implementation
-
-- **Scheduler**: The `DevFeeScheduler` is active and toggles `DevFeeState`.
-- **Identity Switching**: **Not implemented.**
-- **Native Mining**: In the current foundation mode, all shares are submitted under the user's wallet, even during "scheduled" developer periods. The status will show `ScheduledInactive` during these times.
-
-This ensures that no "stealth mining" occurs and the user's hashrate is never diverted without explicit, verified implementation of the switching logic.
+1.  Monitor the `DevFeeState` from the `StatsManager`.
+2.  When the state changes to `ActiveDeveloperMining`, send a new `mining.authorize` request with the developer's wallet and worker.
+3.  Ensure all subsequent `mining.submit` requests use the developer's credentials until the cycle returns to `ActiveUserMining`.
+4.  Re-authorize back to the user's wallet once the developer window closes.

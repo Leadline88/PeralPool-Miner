@@ -1,23 +1,34 @@
 # GPU Readiness
 
-Pearl Miner is designed with future GPU support in mind, but **no GPU code is currently implemented.**
+Pearl Miner is designed with GPU mining in mind, although no GPU kernels are currently implemented.
 
-## Design Foundation
+## Architecture
 
-The following traits in `core/mining` are ready for GPU backend implementation:
+The `MiningBackend` trait in `core/mining` provides the abstraction necessary to support multiple backends.
 
-- `MiningBackend`: Interface for starting/stopping and job management.
-- `MiningAlgorithm`: Interface for job parsing and share verification.
+```rust
+#[async_trait]
+pub trait MiningBackend: Send + Sync {
+    async fn start(&self) -> Result<(), String>;
+    async fn stop(&self) -> Result<(), String>;
+    async fn set_job(&self, job: &str) -> Result<(), String>;
+    async fn get_hashrate(&self) -> f64;
+}
+```
 
 ## Planned Backends
 
-- **CUDA**: `backends/cuda`
-- **HIP**: `backends/hip`
-- **OpenCL**: `backends/opencl`
-- **SYCL/Metal**: `backends/sycl`, `backends/metal`
+Future developers should create new crates in the `backends/` directory for each supported technology:
 
-## Constraints
+- `backends/cuda`: For NVIDIA GPUs.
+- `backends/hip`: For AMD GPUs.
+- `backends/opencl`: For cross-vendor support.
+- `backends/sycl`: For Intel and cross-platform support.
+- `backends/metal`: For Apple Silicon.
 
-- No GPU kernels (CUDA, HIP, OpenCL, SYCL, Metal) are currently in the codebase.
-- Future implementations must ensure zero overhead for users not using GPU backends.
-- All GPU work must be transparently reported in the runtime stats.
+## Implementation Steps
+
+1.  Create the backend crate.
+2.  Implement the `MiningBackend` trait.
+3.  Integrate the new backend into `apps/miner-cli/src/main.rs`.
+4.  Develop and optimize GPU kernels for the Pearl algorithm.
