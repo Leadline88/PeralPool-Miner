@@ -143,28 +143,87 @@ async fn main() {
         return;
     }
 
-    if args.benchmark_native_cpu {
-        run_benchmark().await;
-        return;
-    }
-
     if let Some(path) = args.verify_pearl_fixture {
         verify_fixture(&path).await;
         return;
     }
 
-    let mut config = if args.config.exists() {
-        match Config::load_from_file(&args.config) {
+    let mut config = load_config(&args.config);
+    apply_cli_overrides(&mut config, &args);
+
+    // Validate merged config
+    let validation_res = if args.allow_experimental_live_stratum {
+        config.validate_live()
+    } else {
+        config.validate()
+    };
+
+    if let Err(e) = validation_res {
+        error!("Configuration validation failed: {}", e);
+        error!("Please provide missing values via config file or CLI arguments.");
+        exit(1);
+    }
+
+    if args.validate_config {
+        info!("Configuration is valid.");
+        return;
+    }
+
+    if args.print_command {
+        if config.mode == MiningMode::Compatibility {
+            println!("External miner command:");
+            println!("{} {}", config.miner_binary_path, config.args.join(" "));
+            return;
+        } else {
+            error!("--print-command is only available in compatibility mode.");
+            exit(1);
+        }
+    }
+
+    info!("Starting Pearl Miner...");
+    info!("Mode: {:?}", config.mode);
+    info!("Backend: {:?}", config.backend);
+    info!("Algorithm: {}", config.algo);
+    info!("Worker: {}", config.worker_name);
+    info!("Developer fee: 1.0%");
+
+    if config.benchmark {
+        run_benchmark().await;
+        return;
+    }
+
+    match config.mode {
+        MiningMode::Compatibility => {
+            run_compatibility_mode(config).await;
+        }
+        MiningMode::NativeCpu => {
+            if args.allow_experimental_live_stratum {
+                run_experimental_stratum_test(config).await;
+            } else {
+                run_native_cpu_offline(config).await;
+            }
+        }
+        MiningMode::NativeGpu => {
+            run_native_gpu_not_implemented(config).await;
+        }
+    }
+}
+
+fn load_config(path: &PathBuf) -> Config {
+    if path.exists() {
+        match Config::load_from_file(path) {
             Ok(c) => c,
             Err(e) => {
-                error!("Failed to load configuration from {:?}: {}", args.config, e);
+                error!("Failed to load configuration from {:?}: {}", path, e);
                 exit(1);
             }
         }
     } else {
         Config::default()
-    };
+    }
+}
 
+fn apply_cli_overrides(config: &mut Config, args: &Args) {
     // Process profiles if specified
     if let Some(profile_name) = &args.profile {
         if let Some(profiles) = &config.profiles {
@@ -194,17 +253,17 @@ async fn main() {
     }
 
     // Override config with CLI arguments if provided
-    if let Some(wallet) = args.wallet {
-        config.wallet = wallet;
+    if let Some(wallet) = args.wallet.as_ref() {
+        config.wallet = wallet.clone();
     }
-    if let Some(worker) = args.worker {
-        config.worker_name = worker;
+    if let Some(worker) = args.worker.as_ref() {
+        config.worker_name = worker.clone();
     }
-    if let Some(pool) = args.pool {
-        config.pool_url = pool;
+    if let Some(pool) = args.pool.as_ref() {
+        config.pool_url = pool.clone();
     }
-    if let Some(miner_binary) = args.miner_binary {
-        config.miner_binary_path = miner_binary;
+    if let Some(miner_binary) = args.miner_binary.as_ref() {
+        config.miner_binary_path = miner_binary.clone();
     }
     if let Some(mode) = args.mode {
         config.mode = mode.into();
@@ -212,8 +271,8 @@ async fn main() {
     if let Some(backend) = args.backend {
         config.backend = backend.into();
     }
-    if let Some(algo) = args.algo {
-        config.algo = algo;
+    if let Some(algo) = args.algo.as_ref() {
+        config.algo = algo.clone();
     }
     if let Some(threads) = args.threads {
         config.threads = threads;
@@ -224,251 +283,289 @@ async fn main() {
     if args.dry_run {
         config.dry_run = true;
     }
-
-    // Validate merged config
-    if let Err(e) = config.validate() {
-        error!("Configuration validation failed: {}", e);
-        error!("Please provide missing values via config file or CLI arguments.");
-        exit(1);
+    if args.benchmark_native_cpu {
+        config.benchmark = true;
     }
+}
 
-    if args.validate_config {
-        info!("Configuration is valid.");
+async fn run_compatibility_mode(config: Config) {
+    info!("Running in compatibility mode (external miner)");
+    if config.dry_run {
+        info!("Dry run enabled. Not starting external miner.");
+        return;
+    }
+    Watchdog::run(config.miner_binary_path, config.args).await;
+}
+
+async fn run_native_cpu_offline(config: Config) {
+    warn!("NOTICE: Running in native-cpu mode (SYNTHETIC / REFERENCE-ONLY)");
+    warn!("This implementation is NOT performance competitive and NOT verified for Pearl mainnet.");
+    info!("Native CPU mode is offline synthetic/reference-only. Live PearlPool mining is not verified.");
+    info!(
+        "Developer-fee policy is defined, but active collection is not implemented in native mode."
+    );
+
+    if config.dry_run {
+        info!("Dry run enabled, exiting.");
         return;
     }
 
-    if args.print_command {
-        if config.mode == MiningMode::Compatibility {
-            println!("External miner command:");
-            println!("{} {}", config.miner_binary_path, config.args.join(" "));
-            return;
-        } else {
-            error!("--print-command is only available in compatibility mode.");
-            exit(1);
+    let stats = Arc::new(StatsManager::new());
+    let threads = if config.threads > 0 {
+        config.threads
+    } else {
+        num_cpus::get()
+    };
+
+    // We still use a stub fee state for the backend but don't run the scheduler
+    let fee_state = Arc::new(tokio::sync::RwLock::new(
+        scheduler::DevFeeScheduler::new(
+            config.wallet.clone(),
+            config.worker_name.clone(),
+            stats.clone(),
+        )
+        .get_state(),
+    ));
+
+    let (share_tx, mut share_rx) = mpsc::channel::<PearlShareCandidate>(100);
+
+    let backend = Arc::new(CpuBackend::new(
+        threads,
+        stats.clone(),
+        fee_state.clone(),
+        config.deterministic,
+        share_tx,
+    ));
+
+    backend.start().await.expect("Failed to start backend");
+
+    // Offline synthetic job
+    let dummy_job = serde_json::json!({
+        "id": "offline-synthetic",
+        "blob": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+        "target": 1000000
+    });
+    backend
+        .set_job(&dummy_job.to_string())
+        .await
+        .expect("Failed to set synthetic job");
+
+    // Drain shares to avoid blocking backend
+    tokio::spawn(async move {
+        while share_rx.recv().await.is_some() {
+            // In offline mode, we just drop shares or could count them locally
+        }
+    });
+
+    start_status_loop(
+        stats,
+        None,
+        backend.clone(),
+        config.mode,
+        config.backend,
+        false,
+    );
+
+    tokio::signal::ctrl_c()
+        .await
+        .expect("Failed to listen for Ctrl+C");
+    info!("Received Ctrl+C, shutting down...");
+    backend.stop().await.expect("Failed to stop backend");
+}
+
+async fn run_experimental_stratum_test(config: Config) {
+    warn!("NOTICE: Running in native-cpu mode (EXPERIMENTAL LIVE STRATUM)");
+    warn!("This implementation is NOT performance competitive and NOT verified for Pearl mainnet.");
+    warn!("Live PearlPool mining is UNVERIFIED.");
+
+    if config.dry_run {
+        info!("Dry run enabled. Not connecting to pool.");
+        return;
+    }
+
+    let stats = Arc::new(StatsManager::new());
+    let scheduler = Arc::new(DevFeeScheduler::new(
+        config.wallet.clone(),
+        config.worker_name.clone(),
+        stats.clone(),
+    ));
+    let fee_state = Arc::new(tokio::sync::RwLock::new(scheduler.get_state()));
+    let threads = if config.threads > 0 {
+        config.threads
+    } else {
+        num_cpus::get()
+    };
+
+    let (share_tx, mut share_rx) = mpsc::channel::<PearlShareCandidate>(100);
+
+    let backend = Arc::new(CpuBackend::new(
+        threads,
+        stats.clone(),
+        fee_state.clone(),
+        config.deterministic,
+        share_tx,
+    ));
+
+    let scheduler_clone = scheduler.clone();
+    let fee_state_updater = fee_state.clone();
+    let scheduler_handle = tokio::spawn(async move {
+        // Update local fee_state periodically from scheduler
+        let scheduler_for_updater = scheduler_clone.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                let mut state = fee_state_updater.write().await;
+                *state = scheduler_for_updater.get_state();
+            }
+        });
+        scheduler_clone.run().await;
+    });
+
+    backend.start().await.expect("Failed to start backend");
+
+    let cancel_token = CancellationToken::new();
+
+    // Stratum Client setup
+    let adapter = Arc::new(PearlPoolAdapter::new(true));
+    let client = StratumClient::new(&config.pool_url, adapter.clone());
+    let miner_loop = Arc::new(MinerLoop::new(
+        client.clone(),
+        adapter.clone(),
+        config.wallet.clone(),
+        config.worker_name.clone(),
+        stats.clone(),
+    ));
+
+    let client_clone = client.clone();
+    let cancel_token_clone = cancel_token.clone();
+    tokio::spawn(async move {
+        client_clone.run(cancel_token_clone).await;
+    });
+
+    let mut job_rx = miner_loop.subscribe_jobs();
+    let backend_clone = backend.clone();
+    tokio::spawn(async move {
+        while let Some(job_value) = job_rx.recv().await {
+            let job_str = job_value.to_string();
+            if let Err(e) = backend_clone.set_job(&job_str).await {
+                error!("Failed to set job in backend: {}", e);
+            }
+        }
+    });
+
+    let (miner_share_tx, miner_share_rx) = mpsc::channel(100);
+    let miner_loop_clone = miner_loop.clone();
+    let cancel_token_miner = cancel_token.clone();
+    tokio::spawn(async move {
+        miner_loop_clone
+            .run(miner_share_rx, cancel_token_miner)
+            .await;
+    });
+
+    let worker_name = config.worker_name.clone();
+    tokio::spawn(async move {
+        while let Some(candidate) = share_rx.recv().await {
+            let share = shares::ShareCandidate {
+                worker: worker_name.clone(),
+                job_id: candidate.job_id,
+                nonce: candidate.nonce.to_string(),
+                timestamp: Utc::now(),
+                result: String::new(),
+            };
+            let _ = miner_share_tx.send(share).await;
+        }
+    });
+
+    start_status_loop(
+        stats,
+        Some(scheduler.clone()),
+        backend.clone(),
+        config.mode,
+        config.backend,
+        true,
+    );
+
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received Ctrl+C, shutting down...");
+        }
+        _ = scheduler_handle => {
+            error!("Scheduler task finished unexpectedly");
         }
     }
 
-    info!("Starting Pearl Miner...");
-    info!("Mode: {:?}", config.mode);
+    cancel_token.cancel();
+    backend.stop().await.expect("Failed to stop backend");
+}
+
+async fn run_native_gpu_not_implemented(config: Config) {
+    info!("Running in native-gpu mode");
     info!("Backend: {:?}", config.backend);
-    info!("Algorithm: {}", config.algo);
-    info!("Worker: {}", config.worker_name);
-    info!("Developer fee: 1.0%");
+    error!(
+        "Native GPU mining is not yet implemented for {:?} backend.",
+        config.backend
+    );
+    exit(1);
+}
 
-    match config.mode {
-        MiningMode::Compatibility => {
-            info!("Running in compatibility mode (external miner)");
-            Watchdog::run(config.miner_binary_path, config.args).await;
-        }
-        MiningMode::NativeCpu => {
-            warn!("NOTICE: Running in native-cpu mode (SYNTHETIC / REFERENCE-ONLY)");
-            warn!("This implementation is NOT performance competitive and NOT verified for Pearl mainnet.");
+fn start_status_loop(
+    stats: Arc<StatsManager>,
+    scheduler: Option<Arc<DevFeeScheduler>>,
+    backend: Arc<CpuBackend>,
+    mode: MiningMode,
+    config_backend: ConfigBackend,
+    is_live_experimental: bool,
+) {
+    let start_time = Utc::now();
+    let is_live_str = if is_live_experimental {
+        "live (experimental/unverified)"
+    } else {
+        "synthetic/reference-only"
+    };
 
-            if !args.allow_experimental_live_stratum {
-                info!("Native CPU mode is offline synthetic/reference-only. Live PearlPool mining is not verified.");
-                info!("Developer-fee policy is defined, but active wallet switching is not implemented and no fee is collected in native mode.");
-            }
+    tokio::spawn(async move {
+        let mut total_hashes = 0.0;
+        let mut status_count = 0;
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            let runtime_stats = stats.get_stats().await;
+            let uptime = Utc::now() - start_time;
+            let hashes = backend.get_hashrate().await;
+            total_hashes += hashes;
+            status_count += 1;
 
-            if config.dry_run {
-                info!("Dry run enabled, exiting.");
-                return;
-            }
+            let hashrate = hashes / 10.0;
+            let avg_hashrate = total_hashes / (status_count as f64 * 10.0);
 
-            let stats = Arc::new(StatsManager::new());
-            let scheduler = Arc::new(DevFeeScheduler::new(
-                config.wallet.clone(),
-                config.worker_name.clone(),
-                stats.clone(),
-            ));
-            let fee_state = Arc::new(tokio::sync::RwLock::new(scheduler.get_state()));
-            let threads = if config.threads > 0 {
-                config.threads
+            let dev_fee_state = if let Some(s) = &scheduler {
+                s.get_state().to_string()
             } else {
-                num_cpus::get()
+                "Disabled/Inactive (native mode)".to_string()
             };
 
-            let (share_tx, mut share_rx) = mpsc::channel::<PearlShareCandidate>(100);
-
-            let backend = Arc::new(CpuBackend::new(
-                threads,
-                stats.clone(),
-                fee_state.clone(),
-                config.deterministic,
-                share_tx,
-            ));
-
-            let scheduler_handle = if args.allow_experimental_live_stratum {
-                let scheduler_clone = scheduler.clone();
-                let fee_state_updater = fee_state.clone();
-                Some(tokio::spawn(async move {
-                    // Update local fee_state periodically from scheduler
-                    let scheduler_for_updater = scheduler_clone.clone();
-                    tokio::spawn(async move {
-                        loop {
-                            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                            let mut state = fee_state_updater.write().await;
-                            *state = scheduler_for_updater.get_state();
-                        }
-                    });
-                    scheduler_clone.run().await;
-                }))
-            } else {
-                None
-            };
-
-            backend.start().await.expect("Failed to start backend");
-
-            let cancel_token = CancellationToken::new();
-
-            if args.allow_experimental_live_stratum {
-                // Stratum Client setup
-                let adapter = Arc::new(PearlPoolAdapter::new(args.allow_experimental_live_stratum));
-                let client = StratumClient::new(&config.pool_url, adapter.clone());
-                let miner_loop = Arc::new(MinerLoop::new(
-                    client.clone(),
-                    adapter.clone(),
-                    config.wallet.clone(),
-                    config.worker_name.clone(),
-                    stats.clone(),
-                ));
-
-                let client_clone = client.clone();
-                let cancel_token_clone = cancel_token.clone();
-                tokio::spawn(async move {
-                    client_clone.run(cancel_token_clone).await;
-                });
-
-                let mut job_rx = miner_loop.subscribe_jobs();
-                let backend_clone = backend.clone();
-                tokio::spawn(async move {
-                    while let Some(job_value) = job_rx.recv().await {
-                        let job_str = job_value.to_string();
-                        if let Err(e) = backend_clone.set_job(&job_str).await {
-                            error!("Failed to set job in backend: {}", e);
-                        }
-                    }
-                });
-
-                let (miner_share_tx, miner_share_rx) = mpsc::channel(100);
-                let miner_loop_clone = miner_loop.clone();
-                let cancel_token_miner = cancel_token.clone();
-                tokio::spawn(async move {
-                    miner_loop_clone
-                        .run(miner_share_rx, cancel_token_miner)
-                        .await;
-                });
-
-                let worker_name = config.worker_name.clone();
-                tokio::spawn(async move {
-                    while let Some(candidate) = share_rx.recv().await {
-                        let share = shares::ShareCandidate {
-                            worker: worker_name.clone(),
-                            job_id: candidate.job_id,
-                            nonce: candidate.nonce.to_string(),
-                            timestamp: Utc::now(),
-                            result: String::new(),
-                        };
-                        let _ = miner_share_tx.send(share).await;
-                    }
-                });
-            } else {
-                // Offline synthetic job
-                let dummy_job = serde_json::json!({
-                    "id": "offline-synthetic",
-                    "blob": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-                    "target": 1000000
-                });
-                backend
-                    .set_job(&dummy_job.to_string())
-                    .await
-                    .expect("Failed to set synthetic job");
-
-                // Drain shares to avoid blocking backend
-                tokio::spawn(async move {
-                    while share_rx.recv().await.is_some() {
-                        // In offline mode, we just drop shares or could count them locally
-                    }
-                });
-            }
-
-            // Status display loop
-            let stats_clone = stats.clone();
-            let scheduler_status_clone = scheduler.clone();
-            let backend_status_clone = backend.clone();
-            let start_time = Utc::now();
-            let config_mode = config.mode;
-            let config_backend = config.backend;
-            let is_live = if args.allow_experimental_live_stratum {
-                "live (experimental/unverified)"
-            } else {
-                "synthetic/reference-only"
-            };
-
-            tokio::spawn(async move {
-                let mut total_hashes = 0.0;
-                let mut status_count = 0;
-                loop {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-                    let runtime_stats = stats_clone.get_stats().await;
-                    let uptime = Utc::now() - start_time;
-                    let hashes = backend_status_clone.get_hashrate().await;
-                    total_hashes += hashes;
-                    status_count += 1;
-
-                    let hashrate = hashes / 10.0;
-                    let avg_hashrate = total_hashes / (status_count as f64 * 10.0);
-
-                    let dev_fee_state = scheduler_status_clone.get_state();
-
-                    info!(
-                        "Status: Mode: {:?} | Backend: {:?} | Type: {} | ActiveTarget: {} | ActiveWallet: {} | DevFeeState: {}",
-                        config_mode, config_backend, is_live, runtime_stats.active_target_type, runtime_stats.active_wallet_masked, dev_fee_state
-                    );
-                    info!(
-                        "Status: Uptime: {} | Job Age: {}s | C: {} | S: {} | A: {} | R: {} | Stale: {} | Invalid: {} | U: {} | {:.2} H/s (avg {:.2} H/s)",
-                        format_duration(uptime),
-                        runtime_stats.job_age_secs,
-                        runtime_stats.candidates_found,
-                        runtime_stats.shares_submitted,
-                        runtime_stats.pool_accepted_shares,
-                        runtime_stats.pool_rejected_shares,
-                        runtime_stats.stale_shares,
-                        runtime_stats.invalid_shares,
-                        runtime_stats.unsupported_submit,
-                        hashrate,
-                        avg_hashrate
-                    );
-                }
-            });
-
-            if let Some(handle) = scheduler_handle {
-                tokio::select! {
-                    _ = tokio::signal::ctrl_c() => {
-                        info!("Received Ctrl+C, shutting down...");
-                    }
-                    _ = handle => {
-                        error!("Scheduler task finished unexpectedly");
-                    }
-                }
-            } else {
-                tokio::signal::ctrl_c()
-                    .await
-                    .expect("Failed to listen for Ctrl+C");
-                info!("Received Ctrl+C, shutting down...");
-            }
-            cancel_token.cancel();
-            backend.stop().await.expect("Failed to stop backend");
-        }
-        MiningMode::NativeGpu => {
-            info!("Running in native-gpu mode");
-            info!("Backend: {:?}", config.backend);
-            error!(
-                "Native GPU mining is not yet implemented for {:?} backend.",
-                config.backend
+            info!(
+                "Status: Mode: {:?} | Backend: {:?} | Type: {} | ActiveTarget: {} | ActiveWallet: {} | DevFeeState: {}",
+                mode, config_backend, is_live_str, runtime_stats.active_target_type, runtime_stats.active_wallet_masked, dev_fee_state
             );
-            exit(1);
+            info!(
+                "Status: Uptime: {} | Job Age: {}s | C: {} | S: {} | A: {} | R: {} | Stale: {} | Invalid: {} | U: {} | {:.2} H/s (avg {:.2} H/s)",
+                format_duration(uptime),
+                runtime_stats.job_age_secs,
+                runtime_stats.candidates_found,
+                runtime_stats.shares_submitted,
+                runtime_stats.pool_accepted_shares,
+                runtime_stats.pool_rejected_shares,
+                runtime_stats.stale_shares,
+                runtime_stats.invalid_shares,
+                runtime_stats.unsupported_submit,
+                hashrate,
+                avg_hashrate
+            );
+            if scheduler.is_none() {
+                info!("Status: Active developer-fee collection is not implemented in native mode.");
+            }
         }
-    }
+    });
 }
 
 fn format_duration(dur: chrono::Duration) -> String {
@@ -623,7 +720,10 @@ fn print_dev_fee_info() {
     println!();
     println!("Cycle: 3600s total (3564s user / 36s dev)");
     println!("Current Status: ScheduledInactive (in native mode)");
-    println!("In native-cpu mode, the scheduler toggles the fee state, but identity switching");
+    println!(
+        "Developer-fee policy is defined, but active collection is not implemented in native mode."
+    );
+    println!("In native mode, the scheduler toggles the fee state, but identity switching");
     println!("(re-authorization) on the Stratum connection is not yet implemented.");
     println!("Shares are currently always submitted under the user wallet.");
 }

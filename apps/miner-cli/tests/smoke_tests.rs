@@ -7,13 +7,17 @@ use stratum::mock_adapter::MockPoolAdapter;
 use stratum::PoolAdapter;
 
 #[test]
-fn test_cli_validate_config() {
+fn test_cli_validate_config_compatibility() {
     let mut cmd = Command::cargo_bin("miner-cli").unwrap();
     cmd.arg("--validate-config")
-        .arg("--wallet")
-        .arg("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa")
+        .arg("--mode")
+        .arg("compatibility")
+        .arg("--miner-binary")
+        .arg("lpminer.exe")
         .arg("--pool")
         .arg("stratum+tcp://pearlpool.cloud:5566")
+        .arg("--wallet")
+        .arg("1A1z")
         .arg("--worker")
         .arg("worker1");
 
@@ -25,6 +29,34 @@ fn test_cli_validate_config() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(combined_output.contains("Configuration is valid"));
+}
+
+#[test]
+fn test_cli_validate_config_native_cpu_offline() {
+    let mut cmd = Command::cargo_bin("miner-cli").unwrap();
+    cmd.arg("--validate-config").arg("--mode").arg("native-cpu");
+
+    let output = cmd.output().expect("failed to execute process");
+    assert!(output.status.success());
+    let combined_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined_output.contains("Configuration is valid"));
+}
+
+#[test]
+fn test_cli_validate_config_native_cpu_experimental_gate() {
+    // Should fail without credentials
+    let mut cmd = Command::cargo_bin("miner-cli").unwrap();
+    cmd.arg("--validate-config")
+        .arg("--mode")
+        .arg("native-cpu")
+        .arg("--allow-experimental-live-stratum");
+
+    let output = cmd.output().expect("failed to execute process");
+    assert!(!output.status.success());
 }
 
 #[test]
@@ -48,14 +80,39 @@ fn test_cli_print_command_compatibility() {
 }
 
 #[test]
-fn test_cli_native_gpu_not_implemented() {
+fn test_cli_print_command_restricted() {
+    let mut cmd = Command::cargo_bin("miner-cli").unwrap();
+    cmd.arg("--mode").arg("native-cpu").arg("--print-command");
+
+    let output = cmd.output().expect("failed to execute process");
+    assert!(!output.status.success());
+    let combined_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined_output.contains("--print-command is only available in compatibility mode"));
+}
+
+#[test]
+fn test_cli_dry_run_compatibility() {
     let mut cmd = Command::cargo_bin("miner-cli").unwrap();
     cmd.arg("--mode")
-        .arg("native-gpu")
-        .arg("--wallet")
-        .arg("1A1z")
-        .arg("--pool")
-        .arg("stratum+tcp://pearlpool.cloud:5566");
+        .arg("compatibility")
+        .arg("--miner-binary")
+        .arg("non_existent_miner")
+        .arg("--dry-run");
+
+    let output = cmd.output().expect("failed to execute process");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Dry run enabled. Not starting external miner."));
+}
+
+#[test]
+fn test_cli_native_gpu_not_implemented() {
+    let mut cmd = Command::cargo_bin("miner-cli").unwrap();
+    cmd.arg("--mode").arg("native-gpu");
 
     let output = cmd.output().expect("failed to execute process");
     assert!(!output.status.success());
@@ -65,6 +122,17 @@ fn test_cli_native_gpu_not_implemented() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(combined_output.contains("Native GPU mining is not yet implemented"));
+}
+
+#[test]
+fn test_cli_dev_fee_info() {
+    let mut cmd = Command::cargo_bin("miner-cli").unwrap();
+    cmd.arg("--dev-fee-info");
+
+    let output = cmd.output().expect("failed to execute process");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("active collection is not implemented in native mode"));
 }
 
 #[test]

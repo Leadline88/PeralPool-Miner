@@ -18,13 +18,17 @@ Pearl Miner provides a foundation/scaffold for a future native miner, while supp
 
 The repository is currently in a "Foundation Freeze" state. It provides a clean, compiling foundation and architecture, but is not yet production-ready for native mining.
 
-- **Compatibility mode**: Available and functional ✅
-- **Config/watchdog/log parser**: Available ✅
+- **Compatibility mode**: Available ✅
+- **Config/profile system**: Available ✅
+- **Watchdog/process supervisor**: Available ✅
+- **Log parser**: Available ✅
 - **Native CPU**: Offline synthetic/reference-only ✅
-- **Real Pearl Algorithm**: Not implemented ❌
+- **Real Pearl algorithm**: Not implemented ❌
+- **Live PearlPool job format**: Not verified ❌
 - **Live PearlPool share submission**: Unsupported ❌
-- **Developer Fee**: Policy defined, active collection not implemented in native mode 🛠️
-- **GPU Backends**: Planned only (Traits/interfaces defined) 🛠️
+- **Stratum**: Foundation/mock/experimental only 🛠️
+- **Developer fee**: Policy defined, active collection not implemented in native mode 🛠️
+- **GPU backends**: Planned only 🛠️
 
 ## Mode Overview
 
