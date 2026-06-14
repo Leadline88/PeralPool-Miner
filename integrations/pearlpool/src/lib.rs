@@ -34,6 +34,11 @@ pub fn validate_credentials(wallet: &str, worker: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Adapter for the PearlPool Stratum protocol.
+///
+/// **Note:** This adapter currently rejects all live share submissions
+/// because the real PearlPool submission format has not been verified.
+/// It will return `PoolAdapterError::UnsupportedRealPearlShareSubmitFormat`.
 pub struct PearlPoolAdapter {
     pub allow_experimental: bool,
 }
@@ -233,5 +238,40 @@ mod tests {
             params: json!([]),
         };
         assert!(adapter.parse_job(&notify).is_none());
+    }
+
+    #[test]
+    fn test_pearlpool_rejects_submit() {
+        let adapter = PearlPoolAdapter::new(true);
+        let share = ShareCandidate {
+            job_id: "test".to_string(),
+            nonce: "123".to_string(),
+            result: "hash".to_string(),
+            worker: "worker".to_string(),
+            timestamp: chrono::Utc::now(),
+        };
+
+        let req = adapter.build_share_submit(&share);
+        assert!(req.is_err());
+        assert!(matches!(
+            req.unwrap_err(),
+            PoolAdapterError::UnsupportedRealPearlShareSubmitFormat
+        ));
+    }
+
+    #[test]
+    fn test_pearlpool_never_builds_fake_submit() {
+        let adapter = PearlPoolAdapter::new(true);
+        let share = ShareCandidate {
+            job_id: "test".to_string(),
+            nonce: "123".to_string(),
+            result: "hash".to_string(),
+            worker: "worker".to_string(),
+            timestamp: chrono::Utc::now(),
+        };
+
+        // Even with experimental enabled, it should NOT return a mining.submit request
+        let req = adapter.build_share_submit(&share);
+        assert!(req.is_err());
     }
 }

@@ -13,7 +13,7 @@ The `core/stratum` crate provides a native Stratum V1 client implementation for 
 
 ## Mock vs Live PearlPool
 
-- **MockPoolAdapter**: Supports fake test submissions for robust test coverage without requiring a live connection.
+- **MockPoolAdapter**: Supports fake test submissions for robust test coverage without requiring a live connection. **Note:** Only for tests; does not reflect real PearlPool format.
 - **PearlPoolAdapter**: Rejects live submit until the real format is verified. The job format and share submission format for the real PearlPool have not been fully verified to match the synthetic reference implementation. Currently returns `UnsupportedRealPearlShareSubmitFormat`.
 
 To enable experimental live mining, use the `--allow-experimental-live-stratum` flag (currently limits to receiving jobs but prohibits fake submittals).
