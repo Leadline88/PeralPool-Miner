@@ -8,7 +8,7 @@ Pearl Miner provides a foundation/scaffold for a future native miner, while supp
 
 - **Multiple Operating Modes**:
   - `compatibility`: Launch and supervise external miner binaries (e.g., lpminer, SRBMiner).
-  - `native-cpu`: Run the internal CPU reference miner (Synthetic/Reference-only).
+  - `native-cpu`: Run the internal CPU reference miner (Synthetic/Offline Reference-only).
 - **Unified Configuration**: Load settings from `config.toml` or via CLI arguments.
 - **Transparent Developer Fee**: 1.0% fee policy defined for future use.
 - **Process Watchdog**: Automatically restarts external miners in compatibility mode.
@@ -19,20 +19,26 @@ Pearl Miner provides a foundation/scaffold for a future native miner, while supp
 The repository is currently in a "Foundation Freeze" state. It provides a clean, compiling foundation and architecture, but is not yet production-ready for native mining.
 
 - **Compatibility mode**: Available and functional ✅
-- **Native CPU reference miner**: Synthetic/Reference-only implementation ✅
+- **Config/watchdog/log parser**: Available ✅
+- **Native CPU**: Offline synthetic/reference-only ✅
 - **Real Pearl Algorithm**: Not implemented ❌
-- **Live PearlPool mining**: Not verified/experimental 🛠️
-- **PearlPool share submission**: Unsupported (Stubbed) 🛠️
-- **Developer Fee**: Policy defined, active wallet switching not implemented in native mode 🛠️
+- **Live PearlPool share submission**: Unsupported ❌
+- **Developer Fee**: Policy defined, active collection not implemented in native mode 🛠️
 - **GPU Backends**: Planned only (Traits/interfaces defined) 🛠️
+
+## Mode Overview
+
+- **Compatibility Mode**: Recommended for live PearlPool mining. Uses proven external miners.
+- **Native CPU Mode**: Offline synthetic/reference-only implementation based on SHA256. Does not connect to pools by default.
+- **Experimental Stratum**: Optional raw Stratum test path, unverified for PearlPool.
 
 ## Native Mode Truthfulness
 
-- **Native CPU**: Synthetic/reference-only implementation based on SHA256.
+- **Native CPU**: Synthetic implementation. Offline by default.
 - **Pearl Algorithm**: The real Pearl mainnet algorithm is **NOT** implemented.
-- **Live PearlPool**: Job parsing is unverified and experimental.
-- **Share Submission**: Live PearlPool share submission is **UNSUPPORTED** until the format is verified.
-- **Developer Fee**: The 1% fee is scheduled by the internal timer, but **NOT** actively collected in native mode (identity switching is pending).
+- **Live Stratum**: Foundation support exists, but live PearlPool mining is **UNVERIFIED**.
+- **Share Submission**: Live PearlPool share submission is **UNSUPPORTED** in native mode.
+- **Developer Fee**: The 1% fee policy is defined, but **NOT** actively collected in native mode.
 
 ## Benchmarking
 
