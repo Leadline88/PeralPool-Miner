@@ -1,7 +1,8 @@
 use serde::Serialize;
 
 pub const DEFAULT_DEV_FEE: f64 = 1.0;
-pub const DEFAULT_DEV_WALLET: &str = "1DevFeeAddressExample";
+/// Placeholder/Example developer wallet address.
+pub const DEFAULT_DEV_WALLET: &str = "1DevFeeAddressExample_PLACEHOLDER";
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum DevFeeState {
