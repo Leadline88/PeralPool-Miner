@@ -1,5 +1,4 @@
-target/
-**/*.rs.bk
+/target
 Cargo.lock
-test.log
 benchmark_report.json
+*.log

@@ -59,16 +59,16 @@ impl DevFeeScheduler {
             // Dev mining window
             {
                 let mut state = self.state.write().unwrap();
-                // In native mode, identity switching (re-authorization) is not yet active.
-                // So we use ScheduledInactive instead of ActiveDeveloperMining.
+                // In native mode, identity switching (re-authorization) is not yet implemented.
+                // So we use ScheduledInactive to indicate the fee period is active but no switching occurs.
                 *state = DevFeeState::ScheduledInactive;
             }
             self.stats
                 .set_dev_fee_state(DevFeeState::ScheduledInactive)
                 .await;
-            info!("Fee Scheduler: Developer fee window scheduled, but native identity switching is not active; continuing under user wallet.");
+            info!("Fee Scheduler: Developer fee window active (scheduled), but identity switching is not implemented in native mode yet; continuing under user wallet.");
 
-            // Keep user identity active
+            // Keep user identity active - NO switching to developer wallet in native foundation mode.
             self.stats
                 .set_identity(ActiveMiningIdentity {
                     wallet: self.user_wallet.clone(),

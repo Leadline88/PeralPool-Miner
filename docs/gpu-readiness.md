@@ -1,29 +1,23 @@
-# GPU Readiness Roadmap
+# GPU Readiness
 
-This document outlines the planned extension points for supporting GPU backends in Pearl Miner. **Note: No GPU code is currently implemented. This document is for design purposes only and implies no current GPU support.**
+Pearl Miner is designed with future GPU support in mind, but **no GPU code is currently implemented.**
 
-## Extension Points
+## Design Foundation
 
-### MiningBackend Trait
-All future GPU backends (CUDA, HIP, OpenCL, etc.) will implement the `MiningBackend` trait defined in `core/mining`. This ensures a consistent interface for starting, stopping, and job management.
+The following traits in `core/mining` are ready for GPU backend implementation:
 
-### Job Distribution Model
-Jobs will be distributed to GPU backends via the central `MinerLoop`. Each backend will be responsible for its own memory management and kernel execution.
+- `MiningBackend`: Interface for starting/stopping and job management.
+- `MiningAlgorithm`: Interface for job parsing and share verification.
 
-### Share Candidate Flow
-GPU backends will use the same asynchronous share candidate channel (`mpsc::Sender<PearlShareCandidate>`) to report found candidates back to the `MinerLoop`.
-
-### Stats Integration
-Real-time hashrate and candidate counts from GPU backends will be integrated into the `StatsManager` using atomic counters to ensure low overhead.
-
-## Planned Backend Locations
+## Planned Backends
 
 - **CUDA**: `backends/cuda`
 - **HIP**: `backends/hip`
 - **OpenCL**: `backends/opencl`
 - **SYCL/Metal**: `backends/sycl`, `backends/metal`
 
-## Future Work
-- Implementation of GPU-specific Pearl algorithm kernels.
-- Optimized memory transfer between Host and Device.
-- Auto-detection of available GPU hardware.
+## Constraints
+
+- No GPU kernels (CUDA, HIP, OpenCL, SYCL, Metal) are currently in the codebase.
+- Future implementations must ensure zero overhead for users not using GPU backends.
+- All GPU work must be transparently reported in the runtime stats.

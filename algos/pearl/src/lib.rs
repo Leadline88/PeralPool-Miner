@@ -14,6 +14,8 @@ pub enum PearlAlgorithmError {
     UnsupportedRealPearlShareSubmitFormat,
     #[error("Invalid job data: {0}")]
     InvalidJobData(String),
+    #[error("Real Pearl algorithm not implemented")]
+    RealPearlAlgorithmNotImplemented,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,7 +98,8 @@ impl MiningAlgorithm for PearlAlgorithm {
             return Ok(job);
         }
 
-        Err(PearlAlgorithmError::UnsupportedRealPearlJobFormat(data.to_string()).to_string())
+        // Clearly indicate that real Pearl algorithm jobs are not implemented
+        Err(PearlAlgorithmError::RealPearlAlgorithmNotImplemented.to_string())
     }
 
     fn create_work(&self, job: &Self::Job, range: NonceRange) -> Self::WorkPackage {
@@ -158,5 +161,14 @@ mod tests {
         let work = algo.create_work(&job, mining::NonceRange { start: 0, end: 100 });
         assert_eq!(work.job_id, "test");
         assert_eq!(work.blob.len(), 16);
+    }
+
+    #[test]
+    fn test_real_pearl_job_returns_error() {
+        let algo = PearlAlgorithm;
+        let real_job_json = r#"{"method":"mining.notify","params":[]}"#;
+        let result = algo.parse_job(real_job_json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Real Pearl algorithm not implemented"));
     }
 }

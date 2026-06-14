@@ -2,9 +2,9 @@ name: CPU Miner CI
 
 on:
   push:
-    branches: [ jules-initial-miner-cli-foundation-12843542801582357184, jules-* ]
+    branches: [ jules-initial-miner-cli-foundation-12843542801582357184 ]
   pull_request:
-    branches: [ jules-initial-miner-cli-foundation-12843542801582357184, jules-* ]
+    branches: [ jules-initial-miner-cli-foundation-12843542801582357184 ]
   workflow_dispatch:
 
 jobs:
