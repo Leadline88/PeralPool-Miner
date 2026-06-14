@@ -33,3 +33,16 @@ impl DevFee {
         DEFAULT_DEV_WALLET
     }
 }
+
+/// Configuration for developer fee policy.
+pub struct DevFeeConfig {
+    pub enabled: bool,
+    pub percentage: f64,
+    pub wallet: String,
+}
+
+/// Policy for developer fee collection.
+pub struct DevFeePolicy {
+    pub min_percentage: f64,
+    pub max_percentage: f64,
+}

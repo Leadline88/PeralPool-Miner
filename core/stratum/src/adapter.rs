@@ -14,6 +14,14 @@ pub enum PoolAdapterError {
     InvalidShareCandidate,
     #[error("Protocol error: {0}")]
     ProtocolError(String),
+    #[error("Real Pearl algorithm not implemented")]
+    RealPearlAlgorithmNotImplemented,
+    #[error("PearlPool live mining not verified")]
+    PearlPoolLiveMiningNotVerified,
+    #[error("Active dev-fee identity switching not implemented")]
+    ActiveDevFeeIdentitySwitchingNotImplemented,
+    #[error("GPU backend not implemented")]
+    GpuBackendNotImplemented,
 }
 
 pub trait PoolAdapter: Send + Sync {

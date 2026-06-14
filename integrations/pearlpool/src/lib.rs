@@ -111,6 +111,8 @@ impl PoolAdapter for PearlPoolAdapter {
         &self,
         _share: &ShareCandidate,
     ) -> Result<JsonRpcRequest, PoolAdapterError> {
+        // STRICT REQUIREMENT: No fake live share submission payloads.
+        // Always return UnsupportedRealPearlShareSubmitFormat for the PearlPoolAdapter.
         Err(PoolAdapterError::UnsupportedRealPearlShareSubmitFormat)
     }
 

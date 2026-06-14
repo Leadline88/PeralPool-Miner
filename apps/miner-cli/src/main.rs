@@ -14,7 +14,7 @@ use stratum::client::StratumClient;
 use stratum::miner_loop::MinerLoop;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use watchdog::Watchdog;
 
 #[derive(Parser, Debug)]
@@ -237,7 +237,8 @@ async fn main() {
             Watchdog::run(config.miner_binary_path, config.args).await;
         }
         MiningMode::NativeCpu => {
-            info!("Running in native-cpu mode");
+            warn!("NOTICE: Running in native-cpu mode (SYNTHETIC / REFERENCE-ONLY)");
+            warn!("This implementation is NOT performance competitive and NOT verified for Pearl mainnet.");
             if config.dry_run {
                 info!("Dry run enabled, exiting.");
                 return;
@@ -343,9 +344,9 @@ async fn main() {
             let config_mode = config.mode;
             let config_backend = config.backend;
             let is_live = if args.allow_experimental_live_stratum {
-                "live (experimental)"
+                "live (experimental/unverified)"
             } else {
-                "synthetic/reference"
+                "synthetic/reference-only"
             };
 
             tokio::spawn(async move {
@@ -417,7 +418,7 @@ fn format_duration(dur: chrono::Duration) -> String {
 }
 
 async fn run_benchmark() {
-    info!("Benchmarking Native CPU...");
+    info!("Benchmarking Native CPU (SYNTHETIC / REFERENCE-ONLY)...");
     let algo = algo_pearl::PearlAlgorithm;
     let dummy_job_json = r#"{"id":"bench","blob":"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff","target":1000000}"#;
 
@@ -503,7 +504,7 @@ async fn run_benchmark() {
     info!("Multi-threaded result: {:.2} H/s", hashrate_multi);
 
     let report = serde_json::json!({
-        "backend": "native-cpu",
+        "backend": "native-cpu-synthetic",
         "hashrate_single": hashrate_single,
         "hashrate_multi": hashrate_multi,
         "unit": "H/s",
