@@ -6,6 +6,5 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 mining = { path = "../mining" }
-stats = { path = "../stats" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"

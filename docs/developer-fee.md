@@ -16,7 +16,7 @@ We believe in full transparency regarding developer fees.
 
 1. **Startup Disclosure**: The fee percentage is clearly displayed in the startup banner.
 2. **CLI Flag**: The `--dev-fee-info` flag provides detailed information about the fee and the developer wallet.
-3. **Runtime Status**: The runtime status output clearly indicates whether the miner is currently working for the user or the developer.
+3. **Runtime Status**: The runtime status output clearly indicates whether the miner is currently working for the user or the developer (`DevFeeState`).
 4. **No Obfuscation**: The scheduling logic is open-source and easy to verify in `core/scheduler/src/lib.rs`.
 
 ## Developer Wallet
@@ -26,7 +26,7 @@ The current developer fee wallet is: `1DevFeeAddressExample`
 ## Current Status (Native Mode)
 
 > [!IMPORTANT]
-> In the current native CPU mode, real-time identity switching (re-authorization) on the Stratum connection is not yet implemented. While the scheduler toggles the fee state, shares found during "developer mining" periods are currently submitted under the user's wallet. The status will show `ScheduledInactive` during these periods.
+> In the current native CPU mode, real-time identity switching (re-authorization) on the Stratum connection is not yet implemented. While the scheduler toggles the fee state, `ScheduledInactive` does not mine to the developer wallet. Shares found during "developer mining" periods are currently submitted under the user's wallet. The status will show `ScheduledInactive` during these periods. `ActiveDeveloperMining` is not possible in native mode yet, so the 1% fee is transparent but not actually collected in native mode until identity switching is implemented.
 
 ## Promise
 

@@ -9,7 +9,6 @@ use scheduler::DevFeeScheduler;
 use stats::StatsManager;
 use std::path::PathBuf;
 use std::process::exit;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use stratum::client::StratumClient;
 use stratum::miner_loop::MinerLoop;
@@ -245,11 +244,10 @@ async fn main() {
             }
 
             let stats = Arc::new(StatsManager::new());
-            let is_dev_mining = Arc::new(AtomicBool::new(false));
             let scheduler = Arc::new(DevFeeScheduler::new(
                 config.wallet.clone(),
+                config.worker_name.clone(),
                 stats.clone(),
-                is_dev_mining.clone(),
             ));
             let fee_state = Arc::new(tokio::sync::RwLock::new(scheduler.get_state()));
             let threads = if config.threads > 0 {
@@ -367,20 +365,21 @@ async fn main() {
                     let dev_fee_state = scheduler_status_clone.get_state();
 
                     info!(
-                        "Status: Mode: {:?} | Backend: {:?} | Type: {}",
-                        config_mode, config_backend, is_live
+                        "Status: Mode: {:?} | Backend: {:?} | Type: {} | ActiveTarget: {} | ActiveWallet: {} | DevFeeState: {}",
+                        config_mode, config_backend, is_live, runtime_stats.active_target_type, runtime_stats.active_wallet_masked, dev_fee_state
                     );
                     info!(
-                        "Status: {:.2} H/s (avg {:.2} H/s) | C: {} S: {} A: {} R: {} | Uptime: {} | Job Age: {}s | DevFee: {}",
-                        hashrate,
-                        avg_hashrate,
+                        "Status: Uptime: {} | Job Age: {}s | C: {} | S: {} | A: {} | R: {} | Stale: {} | Invalid: {} | {:.2} H/s (avg {:.2} H/s)",
+                        format_duration(uptime),
+                        runtime_stats.job_age_secs,
                         runtime_stats.candidates_found,
                         runtime_stats.shares_submitted,
                         runtime_stats.pool_accepted_shares,
                         runtime_stats.pool_rejected_shares,
-                        format_duration(uptime),
-                        runtime_stats.job_age_secs,
-                        dev_fee_state
+                        runtime_stats.stale_shares,
+                        runtime_stats.invalid_shares,
+                        hashrate,
+                        avg_hashrate
                     );
                 }
             });

@@ -13,10 +13,10 @@ The `core/stratum` crate provides a native Stratum V1 client implementation for 
 
 ## Mock vs Live PearlPool
 
-- **Mock Mode**: By default, the miner is verified using a `MockStratumServer` and a `MockPoolAdapter` for integration tests.
-- **Live Mode**: Live PearlPool native mining is currently **experimental and unverified**. The job format and share submission format for the real PearlPool have not been fully verified to match the synthetic reference implementation.
+- **MockPoolAdapter**: Supports fake test submissions for robust test coverage without requiring a live connection.
+- **PearlPoolAdapter**: Rejects live submit until the real format is verified. The job format and share submission format for the real PearlPool have not been fully verified to match the synthetic reference implementation. Currently returns `UnsupportedRealPearlShareSubmitFormat`.
 
-To enable experimental live mining, use the `--allow-experimental-live-stratum` flag.
+To enable experimental live mining, use the `--allow-experimental-live-stratum` flag (currently limits to receiving jobs but prohibits fake submittals).
 
 ## Handshake Flow
 
@@ -33,7 +33,7 @@ The client follows the standard Stratum V1 handshake:
 ## Usage
 
 ```rust
-let adapter = Arc::new(PearlPoolAdapter);
+let adapter = Arc::new(PearlPoolAdapter::new(false));
 let client = StratumClient::new("stratum+tcp://pearlpool.cloud:5566", adapter.clone());
 let cancel_token = CancellationToken::new();
 
@@ -41,6 +41,6 @@ let cancel_token = CancellationToken::new();
 tokio::spawn(client.clone().run(cancel_token.clone()));
 
 // Use MinerLoop to handle logic
-let miner = MinerLoop::new(client, adapter, wallet, worker);
+let miner = MinerLoop::new(client, adapter, wallet, worker, stats);
 miner.run(share_rx, cancel_token).await;
 ```

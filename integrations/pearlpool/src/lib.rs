@@ -1,5 +1,6 @@
 use serde_json::{json, Value};
 use shares::ShareCandidate;
+use stratum::adapter::PoolAdapterError;
 use stratum::{JsonRpcRequest, JsonRpcResponse, PoolAdapter};
 
 pub const DEFAULT_POOL_URL: &str = "stratum+tcp://pearlpool.cloud:5566";
@@ -101,26 +102,11 @@ impl PoolAdapter for PearlPoolAdapter {
         }
     }
 
-    fn build_share_submit(&self, share: &ShareCandidate) -> JsonRpcRequest {
-        if !self.allow_experimental {
-            // Return a dummy request that will fail verification if somehow called
-            return JsonRpcRequest {
-                id: None,
-                method: "mining.unsupported_real_pearl_share_submit_format".to_string(),
-                params: json!([]),
-            };
-        }
-        JsonRpcRequest {
-            id: None,
-            method: "mining.submit".to_string(),
-            params: json!([
-                share.worker,
-                share.job_id,
-                "0x00000000",
-                share.timestamp.to_rfc3339(),
-                share.nonce
-            ]),
-        }
+    fn build_share_submit(
+        &self,
+        _share: &ShareCandidate,
+    ) -> Result<JsonRpcRequest, PoolAdapterError> {
+        Err(PoolAdapterError::UnsupportedRealPearlShareSubmitFormat)
     }
 
     fn parse_share_response(&self, response: &JsonRpcResponse) -> Result<bool, String> {
@@ -229,7 +215,13 @@ mod tests {
         };
 
         let req = adapter.build_share_submit(&share);
-        assert_eq!(req.method, "mining.submit");
+        assert!(req.is_err());
+        if let Err(e) = req {
+            assert!(matches!(
+                e,
+                PoolAdapterError::UnsupportedRealPearlShareSubmitFormat
+            ));
+        }
     }
 
     #[test]

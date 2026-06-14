@@ -1,32 +1,24 @@
-use devfee::{DevFeeState, DEFAULT_DEV_FEE, DEFAULT_DEV_WALLET};
-use stats::StatsManager;
+use devfee::{DevFeeState, DEFAULT_DEV_FEE};
+use stats::{ActiveMiningIdentity, MiningTargetType, StatsManager};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
-use std::sync::atomic::{AtomicBool, Ordering};
-
 pub struct DevFeeScheduler {
     user_wallet: String,
-    dev_wallet: String,
+    user_worker: String,
     fee_percent: f64,
     stats: Arc<StatsManager>,
-    is_dev_mining: Arc<AtomicBool>,
     state: Arc<std::sync::RwLock<DevFeeState>>,
 }
 
 impl DevFeeScheduler {
-    pub fn new(
-        user_wallet: String,
-        stats: Arc<StatsManager>,
-        is_dev_mining: Arc<AtomicBool>,
-    ) -> Self {
+    pub fn new(user_wallet: String, user_worker: String, stats: Arc<StatsManager>) -> Self {
         Self {
             user_wallet,
-            dev_wallet: DEFAULT_DEV_WALLET.to_string(),
+            user_worker,
             fee_percent: DEFAULT_DEV_FEE,
             stats,
-            is_dev_mining,
             state: Arc::new(std::sync::RwLock::new(DevFeeState::ActiveUserMining)),
         }
     }
@@ -47,30 +39,43 @@ impl DevFeeScheduler {
                 let mut state = self.state.write().unwrap();
                 *state = DevFeeState::ActiveUserMining;
             }
+            self.stats
+                .set_dev_fee_state(DevFeeState::ActiveUserMining)
+                .await;
             info!(
                 "Fee Scheduler: Switching to USER mining (Wallet: {})",
                 self.user_wallet
             );
-            self.stats.set_wallet(self.user_wallet.clone()).await;
-            self.is_dev_mining.store(false, Ordering::SeqCst);
+            self.stats
+                .set_identity(ActiveMiningIdentity {
+                    wallet: self.user_wallet.clone(),
+                    worker: self.user_worker.clone(),
+                    target_type: MiningTargetType::User,
+                })
+                .await;
 
             sleep(Duration::from_secs(user_time_secs)).await;
 
-            // Dev mining
+            // Dev mining window
             {
                 let mut state = self.state.write().unwrap();
                 // In native mode, identity switching (re-authorization) is not yet active.
                 // So we use ScheduledInactive instead of ActiveDeveloperMining.
                 *state = DevFeeState::ScheduledInactive;
             }
-            info!(
-                "Fee Scheduler: Switching to DEVELOPER mining (1.0% fee, Wallet: {})",
-                self.dev_wallet
-            );
-            info!("Fee Scheduler: [NOTICE] Developer mining is scheduled but not yet active in native mode.");
+            self.stats
+                .set_dev_fee_state(DevFeeState::ScheduledInactive)
+                .await;
+            info!("Fee Scheduler: Developer fee window scheduled, but native identity switching is not active; continuing under user wallet.");
 
-            self.stats.set_wallet(self.dev_wallet.clone()).await;
-            self.is_dev_mining.store(true, Ordering::SeqCst);
+            // Keep user identity active
+            self.stats
+                .set_identity(ActiveMiningIdentity {
+                    wallet: self.user_wallet.clone(),
+                    worker: self.user_worker.clone(),
+                    target_type: MiningTargetType::User,
+                })
+                .await;
 
             sleep(Duration::from_secs(dev_time_secs)).await;
         }
@@ -84,8 +89,7 @@ mod tests {
     #[tokio::test]
     async fn test_fee_averaging() {
         let stats = Arc::new(StatsManager::new());
-        let is_dev_mining = Arc::new(AtomicBool::new(false));
-        let _scheduler = DevFeeScheduler::new("user".to_string(), stats, is_dev_mining.clone());
+        let _scheduler = DevFeeScheduler::new("user".to_string(), "worker".to_string(), stats);
 
         let fee_percent = 1.0;
         let total_cycle = 3600.0;
@@ -100,13 +104,11 @@ mod tests {
     #[tokio::test]
     async fn test_scheduler_state_transitions() {
         let stats = Arc::new(StatsManager::new());
-        let is_dev_mining = Arc::new(AtomicBool::new(false));
         let scheduler = Arc::new(DevFeeScheduler {
             user_wallet: "user".to_string(),
-            dev_wallet: "dev".to_string(),
+            user_worker: "worker".to_string(),
             fee_percent: 50.0, // 50% for fast testing
             stats: stats.clone(),
-            is_dev_mining: is_dev_mining.clone(),
             state: Arc::new(std::sync::RwLock::new(DevFeeState::ActiveUserMining)),
         });
 
@@ -123,24 +125,20 @@ mod tests {
                     let mut state = scheduler_clone.state.write().unwrap();
                     *state = DevFeeState::ActiveUserMining;
                 }
-                scheduler_clone.is_dev_mining.store(false, Ordering::SeqCst);
                 sleep(Duration::from_secs(user_time_secs)).await;
 
                 {
                     let mut state = scheduler_clone.state.write().unwrap();
                     *state = DevFeeState::ScheduledInactive;
                 }
-                scheduler_clone.is_dev_mining.store(true, Ordering::SeqCst);
                 sleep(Duration::from_secs(dev_time_secs)).await;
             }
         });
 
         sleep(Duration::from_millis(500)).await;
         assert_eq!(scheduler.get_state(), DevFeeState::ActiveUserMining);
-        assert_eq!(is_dev_mining.load(Ordering::SeqCst), false);
 
         sleep(Duration::from_secs(1)).await;
         assert_eq!(scheduler.get_state(), DevFeeState::ScheduledInactive);
-        assert_eq!(is_dev_mining.load(Ordering::SeqCst), true);
     }
 }
