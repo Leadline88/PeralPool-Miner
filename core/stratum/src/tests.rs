@@ -60,12 +60,12 @@ mod stratum_tests {
                 None
             }
         }
-        fn build_share_submit(&self, share: &ShareCandidate) -> crate::protocol::JsonRpcRequest {
-            crate::protocol::JsonRpcRequest {
+        fn build_share_submit(&self, share: &ShareCandidate) -> Result<crate::protocol::JsonRpcRequest, crate::adapter::PoolAdapterError> {
+            Ok(crate::protocol::JsonRpcRequest {
                 id: None,
                 method: "mining.submit".to_string(),
                 params: serde_json::json!([share.job_id, share.nonce]),
-            }
+            })
         }
         fn parse_share_response(
             &self,

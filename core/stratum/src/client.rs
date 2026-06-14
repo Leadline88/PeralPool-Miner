@@ -45,10 +45,13 @@ pub struct StratumClient {
 }
 
 impl StratumClient {
+    pub fn get_url(&self) -> &str {
+        &self.url
+    }
     pub fn new(url: &str, adapter: Arc<dyn PoolAdapter>) -> Arc<Self> {
         let (event_tx, _) = broadcast::channel(100);
         Arc::new(Self {
-            url: url.to_string(),
+            url: url.replace("stratum+tcp://", ""),
             adapter,
             request_id: Mutex::new(0),
             pending_requests: Arc::new(Mutex::new(HashMap::new())),

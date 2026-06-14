@@ -1,4 +1,4 @@
-use crate::adapter::PoolAdapter;
+use crate::adapter::{PoolAdapter, PoolAdapterError};
 use crate::client::{StratumClient, StratumEvent};
 use chrono::Utc;
 use shares::{ShareCandidate, ShareResult, ShareStatus, ShareTracker};
@@ -118,7 +118,39 @@ impl MinerLoop {
                     }
                 }
                 Some(share) = share_rx.recv() => {
-                    info!("Miner loop: Submitting share for job {}", share.job_id);
+                    info!("Miner loop: Preparing to submit share for job {}", share.job_id);
+
+                    let current_diff = {
+                        let tracker = self.share_tracker.lock().await;
+                        tracker.current_difficulty
+                    };
+
+                    let submit_req = match self.adapter.build_share_submit(&share) {
+                        Ok(req) => req,
+                        Err(e) => {
+                            match e {
+                                PoolAdapterError::UnsupportedRealPearlShareSubmitFormat => {
+                                    warn!("Miner loop: {}", e);
+                                    self.stats.inc_unsupported_submit();
+                                }
+                                _ => {
+                                    error!("Miner loop: Error building share submit: {}", e);
+                                    self.stats.inc_invalid();
+                                }
+                            }
+
+                            let mut tracker = self.share_tracker.lock().await;
+                            tracker.record_result(&ShareResult {
+                                candidate: share,
+                                status: ShareStatus::Invalid,
+                                difficulty: current_diff,
+                                latency_ms: 0,
+                                error_message: Some(e.to_string()),
+                            });
+                            continue; // Skip actual submission
+                        }
+                    };
+
                     self.stats.inc_shares_submitted();
                     {
                         let mut tracker = self.share_tracker.lock().await;
@@ -126,11 +158,6 @@ impl MinerLoop {
                     }
 
                     let start = Utc::now();
-                    let current_diff = {
-                        let tracker = self.share_tracker.lock().await;
-                        tracker.current_difficulty
-                    };
-                    let submit_req = self.adapter.build_share_submit(&share);
                     let result = match self.client.send_request(submit_req).await {
                         Ok(res) => {
                             let latency = Utc::now().signed_duration_since(start).num_milliseconds() as u64;

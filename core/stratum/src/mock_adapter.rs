@@ -1,4 +1,5 @@
 use crate::adapter::PoolAdapter;
+use crate::adapter::PoolAdapterError;
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::{json, Value};
 use shares::ShareCandidate;
@@ -49,12 +50,15 @@ impl PoolAdapter for MockPoolAdapter {
         None
     }
 
-    fn build_share_submit(&self, share: &ShareCandidate) -> JsonRpcRequest {
-        JsonRpcRequest {
+    fn build_share_submit(
+        &self,
+        share: &ShareCandidate,
+    ) -> Result<JsonRpcRequest, PoolAdapterError> {
+        Ok(JsonRpcRequest {
             id: None,
             method: "mining.submit".to_string(),
-            params: json!([share.worker, share.job_id, share.nonce,]),
-        }
+            params: json!([share.worker, share.job_id, share.nonce]),
+        })
     }
 
     fn parse_share_response(&self, _response: &JsonRpcResponse) -> Result<bool, String> {

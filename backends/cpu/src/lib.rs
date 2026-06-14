@@ -352,6 +352,8 @@ mod tests {
 
         backend1.stop().await.unwrap();
         backend2.stop().await.unwrap();
+        results1.sort();
+        results2.sort();
 
         assert!(!results1.is_empty(), "Should have found some candidates");
         assert_eq!(
@@ -386,5 +388,90 @@ mod tests {
         // But since max_nonces is 100,000 and it yields every 1000, it should be done quickly.
         backend.stop().await.unwrap();
         assert_eq!(backend.active_worker_count().await, 0);
+    }
+    #[tokio::test]
+    async fn test_deterministic_reproducibility_multithread_2() {
+        let stats = Arc::new(StatsManager::new());
+        let fee_state = Arc::new(RwLock::new(DevFeeState::ActiveUserMining));
+        let (share_tx1, mut share_rx1) = mpsc::channel(100);
+        let (share_tx2, mut share_rx2) = mpsc::channel(100);
+
+        let backend1 = CpuBackend::new(2, stats.clone(), fee_state.clone(), true, share_tx1);
+        let backend2 = CpuBackend::new(2, stats.clone(), fee_state.clone(), true, share_tx2);
+
+        // High target (easy to find shares)
+        let dummy_job =
+            r#"{"id":"1","blob":"00112233445566778899aabbccddeeff","target":18000000000000000000}"#;
+
+        backend1.set_job(dummy_job).await.unwrap();
+        backend2.set_job(dummy_job).await.unwrap();
+
+        // Wait for workers to finish their 100,000 nonces
+        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+
+        let mut results1 = Vec::new();
+        let mut results2 = Vec::new();
+
+        while let Ok(candidate) = share_rx1.try_recv() {
+            results1.push(candidate.nonce);
+        }
+        while let Ok(candidate) = share_rx2.try_recv() {
+            results2.push(candidate.nonce);
+        }
+
+        backend1.stop().await.unwrap();
+        backend2.stop().await.unwrap();
+
+        results1.sort();
+        results2.sort();
+
+        assert!(!results1.is_empty(), "Should have found some candidates");
+        assert_eq!(
+            results1, results2,
+            "Deterministic runs should produce identical results"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_deterministic_reproducibility_multithread_4() {
+        let stats = Arc::new(StatsManager::new());
+        let fee_state = Arc::new(RwLock::new(DevFeeState::ActiveUserMining));
+        let (share_tx1, mut share_rx1) = mpsc::channel(100);
+        let (share_tx2, mut share_rx2) = mpsc::channel(100);
+
+        let backend1 = CpuBackend::new(4, stats.clone(), fee_state.clone(), true, share_tx1);
+        let backend2 = CpuBackend::new(4, stats.clone(), fee_state.clone(), true, share_tx2);
+
+        // High target (easy to find shares)
+        let dummy_job =
+            r#"{"id":"1","blob":"00112233445566778899aabbccddeeff","target":18000000000000000000}"#;
+
+        backend1.set_job(dummy_job).await.unwrap();
+        backend2.set_job(dummy_job).await.unwrap();
+
+        // Wait for workers to finish their 100,000 nonces
+        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+
+        let mut results1 = Vec::new();
+        let mut results2 = Vec::new();
+
+        while let Ok(candidate) = share_rx1.try_recv() {
+            results1.push(candidate.nonce);
+        }
+        while let Ok(candidate) = share_rx2.try_recv() {
+            results2.push(candidate.nonce);
+        }
+
+        backend1.stop().await.unwrap();
+        backend2.stop().await.unwrap();
+
+        results1.sort();
+        results2.sort();
+
+        assert!(!results1.is_empty(), "Should have found some candidates");
+        assert_eq!(
+            results1, results2,
+            "Deterministic runs should produce identical results"
+        );
     }
 }

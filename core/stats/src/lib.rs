@@ -3,7 +3,30 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use devfee::DevFeeState;
 use std::time::Instant;
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub enum MiningTargetType {
+    User,
+    Developer,
+}
+
+impl std::fmt::Display for MiningTargetType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MiningTargetType::User => write!(f, "User"),
+            MiningTargetType::Developer => write!(f, "Developer"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ActiveMiningIdentity {
+    pub wallet: String,
+    pub worker: String,
+    pub target_type: MiningTargetType,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RuntimeStats {
@@ -14,9 +37,12 @@ pub struct RuntimeStats {
     pub pool_rejected_shares: u64,
     pub stale_shares: u64,
     pub invalid_shares: u64,
+    pub unsupported_submit: u64,
     pub uptime_secs: u64,
-    pub current_wallet: String,
     pub job_age_secs: u64,
+    pub active_wallet_masked: String,
+    pub active_target_type: MiningTargetType,
+    pub dev_fee_state: DevFeeState,
 }
 
 impl Default for RuntimeStats {
@@ -29,9 +55,12 @@ impl Default for RuntimeStats {
             pool_rejected_shares: 0,
             stale_shares: 0,
             invalid_shares: 0,
+            unsupported_submit: 0,
             uptime_secs: 0,
-            current_wallet: String::new(),
             job_age_secs: 0,
+            active_wallet_masked: String::new(),
+            active_target_type: MiningTargetType::User,
+            dev_fee_state: DevFeeState::Disabled,
         }
     }
 }
@@ -43,9 +72,11 @@ pub struct StatsManager {
     pool_rejected_shares: AtomicU64,
     stale_shares: AtomicU64,
     invalid_shares: AtomicU64,
+    unsupported_submit: AtomicU64,
 
     hashrate: Arc<RwLock<f64>>,
-    current_wallet: Arc<RwLock<String>>,
+    active_identity: Arc<RwLock<ActiveMiningIdentity>>,
+    dev_fee_state: Arc<RwLock<DevFeeState>>,
     start_time: Instant,
     last_job_time: Arc<RwLock<Instant>>,
 }
@@ -65,8 +96,14 @@ impl StatsManager {
             pool_rejected_shares: AtomicU64::new(0),
             stale_shares: AtomicU64::new(0),
             invalid_shares: AtomicU64::new(0),
+            unsupported_submit: AtomicU64::new(0),
             hashrate: Arc::new(RwLock::new(0.0)),
-            current_wallet: Arc::new(RwLock::new(String::new())),
+            active_identity: Arc::new(RwLock::new(ActiveMiningIdentity {
+                wallet: String::new(),
+                worker: String::new(),
+                target_type: MiningTargetType::User,
+            })),
+            dev_fee_state: Arc::new(RwLock::new(DevFeeState::Disabled)),
             start_time: Instant::now(),
             last_job_time: Arc::new(RwLock::new(Instant::now())),
         }
@@ -101,6 +138,10 @@ impl StatsManager {
         self.invalid_shares.fetch_add(1, Ordering::Relaxed);
     }
 
+    pub fn inc_unsupported_submit(&self) {
+        self.unsupported_submit.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn inc_candidates_found_sync(&self) {
         self.candidates_found.fetch_add(1, Ordering::Relaxed);
     }
@@ -118,6 +159,18 @@ impl StatsManager {
     }
 
     pub async fn get_stats(&self) -> RuntimeStats {
+        let identity = self.active_identity.read().await.clone();
+
+        // Mask the wallet (e.g. keep first 6 and last 4, hide rest)
+        let mut masked = String::new();
+        if identity.wallet.len() > 10 {
+            masked.push_str(&identity.wallet[..6]);
+            masked.push_str("...");
+            masked.push_str(&identity.wallet[identity.wallet.len() - 4..]);
+        } else {
+            masked = identity.wallet.clone();
+        }
+
         RuntimeStats {
             hashrate: *self.hashrate.read().await,
             candidates_found: self.candidates_found.load(Ordering::Relaxed),
@@ -126,15 +179,23 @@ impl StatsManager {
             pool_rejected_shares: self.pool_rejected_shares.load(Ordering::Relaxed),
             stale_shares: self.stale_shares.load(Ordering::Relaxed),
             invalid_shares: self.invalid_shares.load(Ordering::Relaxed),
+            unsupported_submit: self.unsupported_submit.load(Ordering::Relaxed),
             uptime_secs: self.start_time.elapsed().as_secs(),
-            current_wallet: self.current_wallet.read().await.clone(),
+            active_wallet_masked: masked,
+            active_target_type: identity.target_type,
+            dev_fee_state: *self.dev_fee_state.read().await,
             job_age_secs: self.last_job_time.read().await.elapsed().as_secs(),
         }
     }
 
-    pub async fn set_wallet(&self, wallet: String) {
-        let mut w = self.current_wallet.write().await;
-        *w = wallet;
+    pub async fn set_identity(&self, identity: ActiveMiningIdentity) {
+        let mut w = self.active_identity.write().await;
+        *w = identity;
+    }
+
+    pub async fn set_dev_fee_state(&self, state: DevFeeState) {
+        let mut s = self.dev_fee_state.write().await;
+        *s = state;
     }
 
     pub async fn notify_new_job(&self) {
@@ -156,7 +217,13 @@ mod tests {
         manager.inc_pool_rejected();
         manager.inc_stale();
         manager.update_hashrate(1234.5).await;
-        manager.set_wallet("test_wallet".to_string()).await;
+        manager
+            .set_identity(ActiveMiningIdentity {
+                wallet: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string(),
+                worker: "worker".to_string(),
+                target_type: MiningTargetType::User,
+            })
+            .await;
 
         let stats = manager.get_stats().await;
         assert_eq!(stats.candidates_found, 1);
@@ -164,7 +231,8 @@ mod tests {
         assert_eq!(stats.pool_rejected_shares, 1);
         assert_eq!(stats.stale_shares, 1);
         assert_eq!(stats.hashrate, 1234.5);
-        assert_eq!(stats.current_wallet, "test_wallet");
+        assert_eq!(stats.active_wallet_masked, "1A1zP1...vfNa");
+        assert_eq!(stats.active_target_type, MiningTargetType::User);
     }
 
     #[tokio::test]

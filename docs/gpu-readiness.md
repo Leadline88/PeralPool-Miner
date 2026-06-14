@@ -1,6 +1,6 @@
 # GPU Readiness Roadmap
 
-This document outlines the planned extension points for supporting GPU backends in Pearl Miner. **Note: No GPU code is currently implemented.**
+This document outlines the planned extension points for supporting GPU backends in Pearl Miner. **Note: No GPU code is currently implemented. This document is for design purposes only and implies no current GPU support.**
 
 ## Extension Points
 
