@@ -1,0 +1,2 @@
+{"direction": "in", "payload": {"id": null, "method": "mining.set_difficulty", "params": [0.5]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
+{"direction": "in", "payload": {"id": null, "method": "mining.notify", "params": ["job_123", "00000000", "010101", "020202", [], "00000001", "1d00ffff", "504c2162", true]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}

@@ -1,0 +1,2 @@
+{"direction": "out", "payload": {"id": 10, "method": "mining.submit", "params": ["1UserWalletAddress_REDACTED", "job_123", "00000000", "504c2162", "00000001"]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
+{"direction": "in", "payload": {"id": 10, "result": true, "error": null}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
