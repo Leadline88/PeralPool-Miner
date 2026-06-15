@@ -26,7 +26,7 @@ The repository is currently in a "Foundation Freeze" state. It provides a clean,
 - **Real Pearl algorithm**: Not implemented ❌
 - **Live PearlPool job format**: Not verified ❌
 - **Live PearlPool share submission**: Unsupported ❌
-- **Stratum**: Foundation/mock/experimental only 🛠️
+- **Stratum**: Foundation/mock/experimental only; live PearlPool mining is not verified. 🛠️
 - **Developer fee**: Policy defined, active collection not implemented in native mode 🛠️
 - **GPU backends**: Planned only 🛠️
 
@@ -63,6 +63,26 @@ cargo run --release --bin miner-cli -- --benchmark-native-cpu
 2. **Build the project:**
    ```bash
    cargo build --release
+   ```
+
+3. **Running the Miner:**
+
+   ### Compatibility Mode (Recommended for Live Mining)
+   Use this mode to run verified external miners (like lpminer or SRBMiner) while using Pearl Miner's management features.
+   ```bash
+   ./target/release/miner-cli --mode compatibility --miner-binary /path/to/lpminer --pool stratum+tcp://pearlpool.cloud:5566 --wallet <YOUR_WALLET>
+   ```
+
+   ### Native CPU Mode (Offline Synthetic/Reference Only)
+   Use this mode to test the internal multi-threaded architecture. No pool connection is made.
+   ```bash
+   ./target/release/miner-cli --mode native-cpu
+   ```
+
+   ### Experimental Stratum Testing (Unverified/Advanced)
+   **Warning:** This mode is for protocol development only. Live share submission is unsupported.
+   ```bash
+   ./target/release/miner-cli --mode native-cpu --allow-experimental-live-stratum --pool stratum+tcp://pearlpool.cloud:5566 --wallet <YOUR_WALLET>
    ```
 
 ## Security and Transparency Promise
