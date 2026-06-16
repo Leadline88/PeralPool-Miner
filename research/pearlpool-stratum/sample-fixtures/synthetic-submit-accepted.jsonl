@@ -1,4 +1,2 @@
-{"metadata":{"event":"connect"}}
-{"timestamp_utc":"2023-10-10T12:00:00Z","session_id":"fake-uuid","direction":"out","raw_line_redacted":"{\"id\":3,\"method\":\"mining.submit\",\"params\":[\"<REDACTED_WALLET>\",\"job_id_redacted\",\"extranonce2_redacted\",\"ntime_redacted\",\"nonce_redacted\"]}","jsonrpc":true,"method":"mining.submit","id":"number","params_shape":"array(5)","redaction_applied":true}
-{"timestamp_utc":"2023-10-10T12:00:01Z","session_id":"fake-uuid","direction":"in","raw_line_redacted":"{\"id\":3,\"result\":true,\"error\":null}","jsonrpc":true,"id":"number","result_shape":"bool","error_shape":"null","redaction_applied":false}
-{"metadata":{"event":"disconnect","reason":"capture_finished"}}
+{"timestamp_utc":"2023-10-27T10:00:03.000Z","session_id":"synthetic-id","direction":"client_to_pool","raw_line_redacted":"{\"id\":10,\"method\":\"mining.submit\",\"params\":[\"<REDACTED_WALLET_OR_USER>\",\"job1\",\"00000001\",\"ntime\",\"nonce\"]}","jsonrpc":true,"method":"mining.submit","id":"number","params_shape":"array(5)","redaction_applied":true}
+{"timestamp_utc":"2023-10-27T10:00:03.100Z","session_id":"synthetic-id","direction":"pool_to_client","raw_line_redacted":"{\"id\":10,\"result\":true,\"error\":null}","jsonrpc":true,"id":"number","result_shape":"bool","error_shape":"null","redaction_applied":false}

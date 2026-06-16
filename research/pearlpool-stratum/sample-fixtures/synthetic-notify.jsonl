@@ -1,3 +1,2 @@
-{"metadata":{"event":"connect"}}
-{"timestamp_utc":"2023-10-10T12:00:00Z","session_id":"fake-uuid","direction":"in","raw_line_redacted":"{\"id\":null,\"method\":\"mining.notify\",\"params\":[\"job_id_redacted\",\"prevhash_redacted\",\"coinb1_redacted\",\"coinb2_redacted\",[],\"00000001\",\"1d00ffff\",\"504c2162\",true]}","jsonrpc":true,"method":"mining.notify","id":"null","params_shape":"array(9)","redaction_applied":false}
-{"metadata":{"event":"disconnect","reason":"capture_finished"}}
+{"timestamp_utc":"2023-10-27T10:00:02.000Z","session_id":"synthetic-id","direction":"pool_to_client","raw_line_redacted":"{\"id\":null,\"method\":\"mining.set_difficulty\",\"params\":[1024]}","jsonrpc":true,"method":"mining.set_difficulty","id":"null","params_shape":"array(1)","redaction_applied":false}
+{"timestamp_utc":"2023-10-27T10:00:02.100Z","session_id":"synthetic-id","direction":"pool_to_client","raw_line_redacted":"{\"id\":null,\"method\":\"mining.notify\",\"params\":[\"job1\",\"prevhash\",\"coinb1\",\"coinb2\",[],\"00000001\",\"nbits\",\"ntime\",true]}","jsonrpc":true,"method":"mining.notify","id":"null","params_shape":"array(9)","redaction_applied":false}

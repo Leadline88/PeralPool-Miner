@@ -1,4 +1,3 @@
-{"metadata":{"event":"connect"}}
-{"timestamp_utc":"2023-10-10T12:00:00Z","session_id":"fake-uuid","direction":"out","raw_line_redacted":"{\"id\":1,\"method\":\"mining.subscribe\",\"params\":[\"pearl-miner/0.1.0\"]}","jsonrpc":true,"method":"mining.subscribe","id":"number","params_shape":"array(1)","redaction_applied":false}
-{"timestamp_utc":"2023-10-10T12:00:01Z","session_id":"fake-uuid","direction":"in","raw_line_redacted":"{\"id\":1,\"result\":[[\"mining.set_difficulty\",\"deadbeef\"],\"01234567\"],\"error\":null}","jsonrpc":true,"id":"number","result_shape":"array(2)","error_shape":"null","redaction_applied":false}
-{"metadata":{"event":"disconnect","reason":"capture_finished"}}
+{"timestamp_utc":"2023-10-27T10:00:00.000Z","session_id":"synthetic-id","direction":"proxy_event","raw_line_redacted":"","jsonrpc":false,"redaction_applied":false,"notes":"event: connect, reason: miner_connected"}
+{"timestamp_utc":"2023-10-27T10:00:00.100Z","session_id":"synthetic-id","direction":"client_to_pool","raw_line_redacted":"{\"id\":1,\"method\":\"mining.subscribe\",\"params\":[\"PeralPoolMiner/0.1.0\"]}","jsonrpc":true,"method":"mining.subscribe","id":"number","params_shape":"array(1)","redaction_applied":false}
+{"timestamp_utc":"2023-10-27T10:00:00.200Z","session_id":"synthetic-id","direction":"pool_to_client","raw_line_redacted":"{\"id\":1,\"result\":[[\"mining.set_difficulty\",\"deadbeef\"],\"00000001\",4],\"error\":null}","jsonrpc":true,"id":"number","result_shape":"array(3)","error_shape":"null","redaction_applied":false}
