@@ -1,4 +1,5 @@
 mod args;
+mod error;
 mod fixture;
 mod jsonrpc;
 mod proxy;
@@ -7,16 +8,23 @@ mod redaction;
 use clap::Parser;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = args::Args::parse();
-    args.validate();
+
+    if let Err(e) = args.validate() {
+        eprintln!("Configuration error: {}", e);
+        std::process::exit(1);
+    }
 
     if args.dry_run {
         println!("Dry run complete. Arguments are valid.");
-        return;
+        return Ok(());
     }
 
     if let Err(e) = proxy::run(args).await {
-        eprintln!("Error: {}", e);
+        eprintln!("Runtime error: {}", e);
+        std::process::exit(1);
     }
+
+    Ok(())
 }

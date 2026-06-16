@@ -1,53 +1,88 @@
 # Stratum Capture Tool
 
-A standalone utility designed to securely capture and redact Stratum JSON-RPC traffic.
+A standalone Stratum JSON-RPC proxy and capture tool for recording and redacting mining pool traffic.
 
 ## Purpose
-This tool acts as a TCP proxy between an external miner and a remote Stratum pool. It records the session traffic and automatically redacts sensitive data (wallets, passwords, workers) to generate sanitized JSONL fixtures.
 
-## Warning
-**NEVER COMMIT RAW UNREDACTED CAPTURES TO GIT.**
+This tool acts as a transparent TCP proxy between a miner and a pool. It logs every line of communication, redacting sensitive information like wallets, workers, and passwords, and produces a structured JSONL fixture file for testing and research.
 
-Always review the generated `.jsonl` files before committing them. Look for leaked IP addresses or unredacted passwords.
+## Safety Warning
+
+**NEVER commit unredacted captures to the repository.**
+Always review the output file before sharing or committing. While the tool performs automatic redaction, it is your responsibility to ensure no PII (Personally Identifiable Information) or secrets remain.
 
 ## Build
 
 ```bash
 cd tools/stratum-capture
-cargo build --release
+cargo build
 ```
 
-## Running
+## Test
 
-1. **Start the proxy:**
-   Point the capture tool to the PearlPool endpoint and specify redaction fields.
+```bash
+cd tools/stratum-capture
+cargo test
+```
 
-   ```bash
-   ./target/release/stratum-capture \
-     --listen 127.0.0.1:3333 \
-     --pool pearlpool.cloud:5566 \
-     --output ./capture.jsonl \
-     --redact-wallet 1MySecretWallet... \
-     --redact-worker myworker1
-   ```
+## Usage
 
-2. **Start your miner:**
-   Configure your external miner (e.g. lpminer, SRBMiner) to point to the local capture tool.
+### Dry Run (Validation)
 
-   ```bash
-   ./miners/lpminer/lpminer.exe --pool stratum+tcp://127.0.0.1:3333 --wallet 1MySecretWallet... --worker myworker1
-   ```
+Validate your arguments without opening any sockets:
 
-## What is Captured
-- Bidirectional TCP data, line by line.
-- Extracted JSON-RPC shapes (method, id type, params length/keys, result keys).
+```bash
+cargo run -- --pool pearlpool.cloud:5566 --output test.jsonl --dry-run
+```
 
-## What is Redacted
-- Explicit matching strings given via CLI (`--redact-wallet`, `--redact-worker`, `--redact-password`).
-- JSON values matching keys like `user`, `pass`, `password`, `worker`, `wallet`, `login`, `address`.
+### Local Capture Proxy
+
+Run the proxy to listen on `127.0.0.1:3333` and forward to PearlPool:
+
+```bash
+cargo run -- \
+  --listen 127.0.0.1:3333 \
+  --pool pearlpool.cloud:5566 \
+  --output my_capture.jsonl \
+  --redact-wallet <YOUR_WALLET> \
+  --redact-worker <YOUR_WORKER>
+```
+
+Then, point your external miner (e.g., `lpminer`) to `127.0.0.1:3333` instead of the pool's real address.
+
+### Automatic Stop
+
+You can limit the capture session by lines or duration:
+
+```bash
+# Stop after 100 lines
+cargo run -- --pool ... --output ... --max-lines 100
+
+# Stop after 60 seconds
+cargo run -- --pool ... --output ... --max-seconds 60
+```
+
+## What gets captured
+
+- Timestamps (UTC)
+- Direction (`client_to_pool`, `pool_to_client`, `proxy_event`)
+- Redacted raw lines
+- Extracted JSON-RPC metadata (method, id, shapes of params/result/error)
+- Proxy events (connect, disconnect)
+
+## Redaction Rules
+
+- Exact matches for `--redact-wallet`, `--redact-worker`, and `--redact-password` are replaced with `<REDACTED_WALLET>`, etc.
+- JSON fields named `user`, `pass`, `password`, `worker`, `wallet`, `login`, `address` are automatically redacted recursively.
+- Placeholder values:
+    - Wallet/Address/Login/User: `<REDACTED_WALLET_OR_USER>`
+    - Worker: `<REDACTED_WORKER>`
+    - Password: `<REDACTED_PASSWORD>`
 
 ## Fixture Review Checklist
-- [ ] No occurrences of your real wallet address.
-- [ ] No occurrences of your real worker name.
-- [ ] No occurrences of your pool password.
-- [ ] `redaction_applied` boolean is checked if appropriate.
+
+Before using a capture for tests or documentation:
+1. [ ] No real IP addresses in `raw_line_redacted`.
+2. [ ] No real wallet addresses or worker names.
+3. [ ] No real passwords.
+4. [ ] JSON-RPC structure is intact but values are safely placeholderized.

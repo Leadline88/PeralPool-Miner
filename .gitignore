@@ -11,3 +11,5 @@ capture.jsonl
 *.capture.jsonl
 captures/
 unredacted/
+tools/stratum-capture/capture.jsonl
+tools/stratum-capture/*.capture.jsonl

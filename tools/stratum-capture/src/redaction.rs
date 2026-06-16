@@ -46,31 +46,40 @@ impl Redactor {
         let mut mutated = false;
         match value {
             Value::Object(map) => {
-                let keys_to_redact = [
-                    "user", "pass", "password", "worker", "wallet", "login", "address",
-                ];
                 for (k, v) in map.iter_mut() {
-                    if keys_to_redact.contains(&k.to_lowercase().as_str()) {
-                        let redacted_val = if k.to_lowercase().contains("pass") {
+                    let key_lower = k.to_lowercase();
+                    let is_sensitive = matches!(
+                        key_lower.as_str(),
+                        "user" | "pass" | "password" | "worker" | "wallet" | "login" | "address"
+                    );
+
+                    if is_sensitive {
+                        let placeholder = if key_lower.contains("pass") {
                             "<REDACTED_PASSWORD>"
-                        } else if k.to_lowercase().contains("worker") {
+                        } else if key_lower.contains("worker") {
                             "<REDACTED_WORKER>"
-                        } else if k.to_lowercase().contains("wallet")
-                            || k.to_lowercase().contains("address")
+                        } else if key_lower.contains("wallet")
+                            || key_lower.contains("address")
+                            || key_lower.contains("login")
+                            || key_lower.contains("user")
                         {
-                            "<REDACTED_WALLET>"
+                            "<REDACTED_WALLET_OR_USER>"
                         } else {
                             "<REDACTED>"
                         };
 
-                        if *v != Value::String(redacted_val.to_string()) {
-                            *v = Value::String(redacted_val.to_string());
+                        // Only redact if it's not already the placeholder and not empty (unless original was empty)
+                        if let Value::String(s) = v {
+                            if s != placeholder && !s.is_empty() {
+                                *v = Value::String(placeholder.to_string());
+                                mutated = true;
+                            }
+                        } else {
+                            *v = Value::String(placeholder.to_string());
                             mutated = true;
                         }
-                    } else {
-                        if self.redact_json_value(v) {
-                            mutated = true;
-                        }
+                    } else if self.redact_json_value(v) {
+                        mutated = true;
                     }
                 }
             }
@@ -147,9 +156,9 @@ mod tests {
             "id": 1,
             "method": "mining.authorize",
             "params": {
-                "user": "<REDACTED>",
+                "user": "<REDACTED_WALLET_OR_USER>",
                 "password": "<REDACTED_PASSWORD>",
-                "wallet": "<REDACTED_WALLET>",
+                "wallet": "<REDACTED_WALLET_OR_USER>",
                 "other": "safe_value"
             }
         });
