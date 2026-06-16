@@ -1,2 +1,3 @@
-{"direction": "in", "payload": {"id": null, "method": "mining.set_difficulty", "params": [0.5]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
-{"direction": "in", "payload": {"id": null, "method": "mining.notify", "params": ["job_123", "00000000", "010101", "020202", [], "00000001", "1d00ffff", "504c2162", true]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
+{"metadata":{"event":"connect"}}
+{"timestamp_utc":"2023-10-10T12:00:00Z","session_id":"fake-uuid","direction":"in","raw_line_redacted":"{\"id\":null,\"method\":\"mining.notify\",\"params\":[\"job_id_redacted\",\"prevhash_redacted\",\"coinb1_redacted\",\"coinb2_redacted\",[],\"00000001\",\"1d00ffff\",\"504c2162\",true]}","jsonrpc":true,"method":"mining.notify","id":"null","params_shape":"array(9)","redaction_applied":false}
+{"metadata":{"event":"disconnect","reason":"capture_finished"}}
