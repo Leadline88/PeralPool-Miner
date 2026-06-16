@@ -1,44 +1,53 @@
-# Stratum Capture Tool Design
+# Stratum Capture Tool
 
-This document outlines the design for a standalone Stratum capture tool. The tool is intended to be used as a proxy or a passive sniffer to record communication between a miner and a Stratum pool.
+A standalone utility designed to securely capture and redact Stratum JSON-RPC traffic.
 
-## Objective
+## Purpose
+This tool acts as a TCP proxy between an external miner and a remote Stratum pool. It records the session traffic and automatically redacts sensitive data (wallets, passwords, workers) to generate sanitized JSONL fixtures.
 
-Create a lightweight, standalone utility that can:
-1. Act as a TCP proxy between a miner and a Stratum pool.
-2. Log all bidirectional JSON-RPC traffic.
-3. Automatically apply redaction rules defined in `research/pearlpool-stratum/redaction-policy.md`.
-4. Output traffic in the format defined in `research/pearlpool-stratum/fixture-format.md`.
+## Warning
+**NEVER COMMIT RAW UNREDACTED CAPTURES TO GIT.**
 
-## Proposed Architecture
+Always review the generated `.jsonl` files before committing them. Look for leaked IP addresses or unredacted passwords.
 
-The tool should be implemented as a standalone Rust crate outside the main workspace to avoid dependency bloat and ensure it remains a pure research utility.
-
-### Components
-
-- **Proxy Listener:** Listens for incoming TCP connections from the miner.
-- **Pool Client:** Establishes a TCP connection to the real Stratum pool.
-- **Traffic Interceptor:** Asynchronously pipes data between the miner and the pool, parsing each line as a potential JSON-RPC message.
-- **Redactor:** A module that identifies and masks sensitive fields based on regex patterns or JSON path selectors.
-- **Logger:** Writes the sanitized messages to a `.jsonl` file.
-
-### CLI Interface (Conceptual)
+## Build
 
 ```bash
-stratum-capture \
-  --listen 127.0.0.1:3333 \
-  --pool pearlpool.example.com:4444 \
-  --output ./fixtures/capture.jsonl \
-  --redact-wallet 1UserWalletAddress... \
-  --redact-worker worker1
+cd tools/stratum-capture
+cargo build --release
 ```
 
-## Implementation Notes
+## Running
 
-- **No Dependency on `miner-cli`:** The tool must not depend on any miner logic. It is a protocol-agnostic proxy.
-- **No Changes to `core/stratum`:** The capture tool uses its own minimal Stratum parsing logic to avoid introducing circular dependencies or modifying production code.
-- **Async Runtime:** Likely `tokio` for efficient handling of concurrent TCP streams.
+1. **Start the proxy:**
+   Point the capture tool to the PearlPool endpoint and specify redaction fields.
 
-## Security
+   ```bash
+   ./target/release/stratum-capture \
+     --listen 127.0.0.1:3333 \
+     --pool pearlpool.cloud:5566 \
+     --output ./capture.jsonl \
+     --redact-wallet 1MySecretWallet... \
+     --redact-worker myworker1
+   ```
 
-The capture tool handles sensitive information (wallets, passwords) before redaction. It must be used in a secure environment, and the unredacted logs must never be committed to version control.
+2. **Start your miner:**
+   Configure your external miner (e.g. lpminer, SRBMiner) to point to the local capture tool.
+
+   ```bash
+   ./miners/lpminer/lpminer.exe --pool stratum+tcp://127.0.0.1:3333 --wallet 1MySecretWallet... --worker myworker1
+   ```
+
+## What is Captured
+- Bidirectional TCP data, line by line.
+- Extracted JSON-RPC shapes (method, id type, params length/keys, result keys).
+
+## What is Redacted
+- Explicit matching strings given via CLI (`--redact-wallet`, `--redact-worker`, `--redact-password`).
+- JSON values matching keys like `user`, `pass`, `password`, `worker`, `wallet`, `login`, `address`.
+
+## Fixture Review Checklist
+- [ ] No occurrences of your real wallet address.
+- [ ] No occurrences of your real worker name.
+- [ ] No occurrences of your pool password.
+- [ ] `redaction_applied` boolean is checked if appropriate.

@@ -65,3 +65,33 @@ jobs:
         with:
           name: benchmark-report-${{ matrix.os }}
           path: benchmark_report.json
+
+  stratum-capture:
+    name: Stratum Capture Tool on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Check format
+        run: cd tools/stratum-capture && cargo fmt -- --check
+
+      - name: Run clippy
+        run: cd tools/stratum-capture && cargo clippy -- -D warnings
+
+      - name: Run tests
+        run: cd tools/stratum-capture && cargo test
+
+      - name: Build
+        run: cd tools/stratum-capture && cargo build

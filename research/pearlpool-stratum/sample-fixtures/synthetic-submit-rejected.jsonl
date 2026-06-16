@@ -1,2 +1,4 @@
-{"direction": "out", "payload": {"id": 11, "method": "mining.submit", "params": ["1UserWalletAddress_REDACTED", "job_124", "00000000", "504c2162", "00000002"]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
-{"direction": "in", "payload": {"id": 11, "result": null, "error": [21, "Job not found", null]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
+{"metadata":{"event":"connect"}}
+{"timestamp_utc":"2023-10-10T12:00:00Z","session_id":"fake-uuid","direction":"out","raw_line_redacted":"{\"id\":4,\"method\":\"mining.submit\",\"params\":[\"<REDACTED_WALLET>\",\"job_id_redacted\",\"extranonce2_redacted\",\"ntime_redacted\",\"nonce_redacted\"]}","jsonrpc":true,"method":"mining.submit","id":"number","params_shape":"array(5)","redaction_applied":true}
+{"timestamp_utc":"2023-10-10T12:00:01Z","session_id":"fake-uuid","direction":"in","raw_line_redacted":"{\"id\":4,\"result\":null,\"error\":[20,\"Other/Unknown\",null]}","jsonrpc":true,"id":"number","result_shape":"null","error_shape":"array(3)","redaction_applied":false}
+{"metadata":{"event":"disconnect","reason":"capture_finished"}}

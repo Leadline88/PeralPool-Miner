@@ -1,0 +1,4 @@
+{"metadata":{"event":"connect"}}
+{"timestamp_utc":"2023-10-10T12:00:00Z","session_id":"fake-uuid","direction":"out","raw_line_redacted":"{\"id\":2,\"method\":\"mining.authorize\",\"params\":[\"<REDACTED_WALLET>.<REDACTED_WORKER>\",\"<REDACTED_PASSWORD>\"]}","jsonrpc":true,"method":"mining.authorize","id":"number","params_shape":"array(2)","redaction_applied":true}
+{"timestamp_utc":"2023-10-10T12:00:01Z","session_id":"fake-uuid","direction":"in","raw_line_redacted":"{\"id\":2,\"result\":true,\"error\":null}","jsonrpc":true,"id":"number","result_shape":"bool","error_shape":"null","redaction_applied":false}
+{"metadata":{"event":"disconnect","reason":"capture_finished"}}

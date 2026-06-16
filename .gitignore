@@ -2,3 +2,12 @@
 Cargo.lock
 benchmark_report.json
 *.log
+
+# stratum-capture target
+tools/stratum-capture/target/
+
+# stratum-capture
+capture.jsonl
+*.capture.jsonl
+captures/
+unredacted/

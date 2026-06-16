@@ -1,2 +1,4 @@
-{"direction": "out", "payload": {"id": 1, "method": "mining.subscribe", "params": ["pearl-miner/0.1.0-synthetic"]}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
-{"direction": "in", "payload": {"id": 1, "result": [["mining.set_difficulty", "deadbeef"], "01234567"], "error": null}, "metadata": {"note": "SYNTHETIC: Not captured from real PearlPool"}}
+{"metadata":{"event":"connect"}}
+{"timestamp_utc":"2023-10-10T12:00:00Z","session_id":"fake-uuid","direction":"out","raw_line_redacted":"{\"id\":1,\"method\":\"mining.subscribe\",\"params\":[\"pearl-miner/0.1.0\"]}","jsonrpc":true,"method":"mining.subscribe","id":"number","params_shape":"array(1)","redaction_applied":false}
+{"timestamp_utc":"2023-10-10T12:00:01Z","session_id":"fake-uuid","direction":"in","raw_line_redacted":"{\"id\":1,\"result\":[[\"mining.set_difficulty\",\"deadbeef\"],\"01234567\"],\"error\":null}","jsonrpc":true,"id":"number","result_shape":"array(2)","error_shape":"null","redaction_applied":false}
+{"metadata":{"event":"disconnect","reason":"capture_finished"}}
