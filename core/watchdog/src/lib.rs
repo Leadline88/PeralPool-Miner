@@ -40,7 +40,10 @@ pub struct Watchdog;
 
 impl Watchdog {
     pub async fn run(binary_path: String, args: Vec<String>) {
-        let config = WatchdogConfig::default();
+        Self::run_with_config(WatchdogConfig::default(), binary_path, args).await;
+    }
+
+    pub async fn run_with_config(config: WatchdogConfig, binary_path: String, args: Vec<String>) {
         let mut state = WatchdogState::default();
 
         loop {
@@ -145,5 +148,39 @@ mod tests {
             state.restart_timestamps.len(),
             config.max_restarts_per_window
         );
+    }
+
+    #[tokio::test]
+    async fn test_watchdog_dummy_process() {
+        let config = WatchdogConfig {
+            restart_delay: Duration::from_millis(50),
+            max_restarts_per_window: 2,
+            window_duration: Duration::from_secs(5),
+        };
+
+        // Use a dummy process that exits immediately
+        let dummy_binary = if cfg!(windows) {
+            "cmd".to_string()
+        } else {
+            "false".to_string()
+        };
+
+        let args = if cfg!(windows) {
+            vec!["/C".to_string(), "exit 1".to_string()]
+        } else {
+            vec![]
+        };
+
+        let start_time = Instant::now();
+
+        // Run the watchdog with the dummy process. It should reach the restart limit and exit.
+        Watchdog::run_with_config(config, dummy_binary, args).await;
+
+        let elapsed = start_time.elapsed();
+
+        // It should restart 2 times with a 50ms delay each, plus some overhead.
+        // It should definitely finish well within 1 second.
+        assert!(elapsed.as_millis() >= 100);
+        assert!(elapsed.as_millis() < 1000);
     }
 }
