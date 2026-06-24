@@ -40,11 +40,14 @@ pub struct Watchdog;
 
 impl Watchdog {
     pub async fn run(binary_path: String, args: Vec<String>) {
-        let config = WatchdogConfig::default();
+        Self::run_with_config(binary_path, args, WatchdogConfig::default()).await;
+    }
+
+    pub async fn run_with_config(binary_path: String, args: Vec<String>, config: WatchdogConfig) {
         let mut state = WatchdogState::default();
 
         loop {
-            info!("Watchdog: Starting miner...");
+            info!("Watchdog: Starting miner process: {} {:?}", binary_path, args);
             let child_result = ProcessManager::spawn(&binary_path, &args).await;
 
             match child_result {
@@ -145,5 +148,34 @@ mod tests {
             state.restart_timestamps.len(),
             config.max_restarts_per_window
         );
+    }
+
+    #[tokio::test]
+    async fn test_watchdog_with_dummy_process() {
+        let config = WatchdogConfig {
+            restart_delay: Duration::from_millis(10),
+            max_restarts_per_window: 2,
+            window_duration: Duration::from_secs(5),
+        };
+
+        let cmd = if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "false"
+        };
+        let args = if cfg!(target_os = "windows") {
+            vec!["/C".to_string(), "exit 1".to_string()]
+        } else {
+            vec![]
+        };
+
+        let start = Instant::now();
+        // Run watchdog with dummy child process
+        // It should exit gracefully after hitting max_restarts_per_window limit.
+        Watchdog::run_with_config(cmd.to_string(), args, config).await;
+
+        let elapsed = start.elapsed();
+        // Since restart_delay is 10ms and max_restarts is 2, the total runtime should be very short.
+        assert!(elapsed < Duration::from_secs(2));
     }
 }
