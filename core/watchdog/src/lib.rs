@@ -40,7 +40,10 @@ pub struct Watchdog;
 
 impl Watchdog {
     pub async fn run(binary_path: String, args: Vec<String>) {
-        let config = WatchdogConfig::default();
+        Self::run_with_config(WatchdogConfig::default(), binary_path, args).await;
+    }
+
+    pub async fn run_with_config(config: WatchdogConfig, binary_path: String, args: Vec<String>) {
         let mut state = WatchdogState::default();
 
         loop {
@@ -116,6 +119,31 @@ impl Watchdog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_watchdog_dummy_process() {
+        let config = WatchdogConfig {
+            restart_delay: Duration::from_millis(10),
+            max_restarts_per_window: 2,
+            window_duration: Duration::from_secs(5),
+        };
+
+        let binary_path = if cfg!(windows) {
+            "cmd".to_string()
+        } else {
+            "false".to_string()
+        };
+
+        let args = if cfg!(windows) {
+            vec!["/c".to_string(), "exit 1".to_string()]
+        } else {
+            vec![]
+        };
+
+        // This should exit after reaching the restart limit of 2, plus the initial failure
+        // Total starts: 3 (1 initial + 2 restarts)
+        Watchdog::run_with_config(config, binary_path, args).await;
+    }
 
     #[test]
     fn test_watchdog_restart_limit() {
