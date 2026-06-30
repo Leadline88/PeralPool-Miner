@@ -40,7 +40,10 @@ pub struct Watchdog;
 
 impl Watchdog {
     pub async fn run(binary_path: String, args: Vec<String>) {
-        let config = WatchdogConfig::default();
+        Self::run_with_config(WatchdogConfig::default(), binary_path, args).await;
+    }
+
+    pub async fn run_with_config(config: WatchdogConfig, binary_path: String, args: Vec<String>) {
         let mut state = WatchdogState::default();
 
         loop {
@@ -118,7 +121,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_watchdog_restart_limit() {
+    fn test_watchdog_restart_limit_logic() {
         let config = WatchdogConfig {
             restart_delay: Duration::from_millis(10),
             max_restarts_per_window: 3,
@@ -145,5 +148,36 @@ mod tests {
             state.restart_timestamps.len(),
             config.max_restarts_per_window
         );
+    }
+
+    #[tokio::test]
+    async fn test_watchdog_with_dummy_process() {
+        let config = WatchdogConfig {
+            restart_delay: Duration::from_millis(10),
+            max_restarts_per_window: 2,
+            window_duration: Duration::from_secs(5),
+        };
+
+        // Use a dummy command that immediately exits with an error
+        #[cfg(unix)]
+        let binary_path = "false".to_string();
+        #[cfg(windows)]
+        let binary_path = "cmd".to_string();
+
+        #[cfg(unix)]
+        let args = vec![];
+        #[cfg(windows)]
+        let args = vec!["/C".to_string(), "exit 1".to_string()];
+
+        let start_time = Instant::now();
+
+        // This should hit the restart limit and exit the loop
+        Watchdog::run_with_config(config, binary_path, args).await;
+
+        let elapsed = start_time.elapsed();
+
+        // It should attempt to run initially, fail, wait 10ms, restart, fail again, and hit the limit of 2.
+        // Thus it shouldn't take longer than a few milliseconds.
+        assert!(elapsed.as_millis() < 1000); // Definitely shouldn't take a whole second
     }
 }
