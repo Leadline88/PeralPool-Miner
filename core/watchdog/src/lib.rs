@@ -4,6 +4,7 @@ use tokio::signal;
 use tokio::time::sleep;
 use tracing::{error, info, warn};
 
+#[derive(Debug, Clone)]
 pub struct WatchdogConfig {
     pub restart_delay: Duration,
     pub max_restarts_per_window: usize,
@@ -40,7 +41,10 @@ pub struct Watchdog;
 
 impl Watchdog {
     pub async fn run(binary_path: String, args: Vec<String>) {
-        let config = WatchdogConfig::default();
+        Self::run_with_config(binary_path, args, WatchdogConfig::default()).await;
+    }
+
+    pub async fn run_with_config(binary_path: String, args: Vec<String>, config: WatchdogConfig) {
         let mut state = WatchdogState::default();
 
         loop {
@@ -145,5 +149,29 @@ mod tests {
             state.restart_timestamps.len(),
             config.max_restarts_per_window
         );
+    }
+
+    #[tokio::test]
+    async fn test_watchdog_with_dummy_process() {
+        let config = WatchdogConfig {
+            restart_delay: Duration::from_millis(10),
+            max_restarts_per_window: 2,
+            window_duration: Duration::from_millis(500),
+        };
+
+        let start = Instant::now();
+
+        let binary = if cfg!(windows) { "cmd".to_string() } else { "false".to_string() };
+        let args = if cfg!(windows) { vec!["/C".to_string(), "exit 1".to_string()] } else { vec![] };
+
+        // Run the watchdog with a process that exits immediately.
+        // It should try starting it 2 times then give up due to restart limits.
+        Watchdog::run_with_config(binary, args, config).await;
+
+        let duration = start.elapsed();
+        // Since it restarts twice with 10ms delay each, it should take at least 20ms,
+        // and shouldn't take anywhere near 500ms since it aborts.
+        assert!(duration >= Duration::from_millis(20));
+        assert!(duration < Duration::from_millis(300));
     }
 }
