@@ -10,3 +10,16 @@ threads = 0
 deterministic = false
 benchmark = false
 dry_run = false
+
+[profiles.pearlpool]
+pool_url = "stratum+tcp://pearlpool.cloud:5566"
+algo = "pearl"
+miner = "lpminer"
+
+[miners.lpminer]
+binary_path = "./miners/lpminer/lpminer.exe"
+args = ["--pool", "{pool_url}", "--wallet", "{wallet}", "--worker", "{worker}"]
+
+[miners.srbminer]
+binary_path = "./miners/srbminer/SRBMiner-MULTI.exe"
+args = ["--algorithm", "pearl", "--pool", "{pool_url}", "--wallet", "{wallet}.{worker}"]
