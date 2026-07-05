@@ -40,7 +40,10 @@ pub struct Watchdog;
 
 impl Watchdog {
     pub async fn run(binary_path: String, args: Vec<String>) {
-        let config = WatchdogConfig::default();
+        Self::run_with_config(binary_path, args, WatchdogConfig::default()).await
+    }
+
+    pub async fn run_with_config(binary_path: String, args: Vec<String>, config: WatchdogConfig) {
         let mut state = WatchdogState::default();
 
         loop {
@@ -145,5 +148,21 @@ mod tests {
             state.restart_timestamps.len(),
             config.max_restarts_per_window
         );
+    }
+
+    #[tokio::test]
+    async fn test_watchdog_run_with_dummy_process() {
+        let config = WatchdogConfig {
+            restart_delay: Duration::from_millis(10),
+            max_restarts_per_window: 2,
+            window_duration: Duration::from_secs(10),
+        };
+
+        let binary = if cfg!(windows) { "cmd".to_string() } else { "false".to_string() };
+        let args = if cfg!(windows) { vec!["/c".to_string(), "exit".to_string(), "1".to_string()] } else { vec![] };
+
+        // This will block and loop until restart limit is reached (2 crashes).
+        Watchdog::run_with_config(binary, args, config).await;
+        // If we reach here, it correctly gave up after max restarts.
     }
 }
